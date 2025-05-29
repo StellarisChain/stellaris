@@ -1,0 +1,9 @@
+{
+    "registry": "https://voxa-registry.connor33341.dev/",
+    "pull-inital-relay-map": true,
+    "pull-inital-node-map": true,
+    "populate-node-map-from-p2p": true,
+    "populate-relay-map-from-p2p": true,
+    "require-encryption": true,
+    "require-authentication": false
+}
