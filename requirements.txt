@@ -6,3 +6,6 @@ fastapi
 httpx
 uvicorn
 cryptography
+colorama
+dotenv
+rsa
