@@ -1,0 +1,8 @@
+pydantic
+mypy
+pytest
+kvprocessor
+fastapi
+httpx
+uvicorn
+cryptography
