@@ -1,4 +1,15 @@
 {
     "node-network-level": "mainnet",
-    "node-autoupdate-config": true
+    "node-autoupdate-config": true,
+    "features": {
+        "enable-transaction-fee": true,
+        "enable-transaction-signing": true,
+        "enable-block-validation": true,
+        "enable-async-operations": true,
+        "enable-transaction-history": true,
+        "enable-network-sync": true,
+        "enable-wallet-management": true,
+        "enable-smart-contracts": false,
+        "enable-multi-signature": false
+    }
 }
