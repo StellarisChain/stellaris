@@ -10,3 +10,4 @@ colorama
 dotenv
 rsa
 psutil
+fastapi[standard]
