@@ -1,5 +1,11 @@
-import dotenv
+import sys
 import os
+# Add the project root to Python path to enable absolute imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+import dotenv
 import logging
 import uuid
 import io

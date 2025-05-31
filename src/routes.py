@@ -3,8 +3,9 @@ import os
 import importlib
 import inspect
 from fastapi import WebSocket, APIRouter, FastAPI, Response
-from lib.dynamiclibrary.loader import DynamicLibraryLoader
-from lib.dynamiclibrary.structs import DynamicLibrary
+#from lib.dynamiclibrary.loader import DynamicLibraryLoader
+#from lib.dynamiclibrary.structs import DynamicLibrary
+from lib.dynamiclibrary import DynamicLibrary, DynamicLibraryLoader
 from util.logging import log
 
 class InternalRouter:

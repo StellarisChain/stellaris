@@ -6,6 +6,7 @@ from colorama import init, Fore, Style, Back
 from util.printcolor import print_color
 
 def set_log_config(log_id: str, force: Optional[bool] = True) -> None:
+    os.makedirs("logs", exist_ok=True)
     logging.basicConfig(filename=f"logs/{log_id}.log", level=logging.DEBUG, force=force)
 
 class log:
