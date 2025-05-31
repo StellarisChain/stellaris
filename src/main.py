@@ -4,6 +4,8 @@ import logging
 import uuid
 import io
 import time
+from fastapi import FastAPI
+from routes import InternalRouter
 from colorama import init, Fore, Style
 from kvprocessor import KVProcessor, KVStructLoader, LoadEnv
 from util.logging import log, set_log_config
@@ -29,7 +31,9 @@ class Main:
         self.logger.info(f"Loading environment variables: {list(self.env_config.keys())}")
         self.validated_config = self.env_kv_processor.process_config(self.env_config)
         self.logger.info(f"Validated configuration: {self.validated_config}")
-
+        self.app = FastAPI()
+        self.internal_router = InternalRouter()
+        self.internal_router.add_to_app(self.app)
 
 if __name__ == "__main__":
     print(Fore.GREEN + "Initializing application...")

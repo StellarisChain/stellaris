@@ -9,3 +9,4 @@ cryptography
 colorama
 dotenv
 rsa
+psutil
