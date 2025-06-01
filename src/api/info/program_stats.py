@@ -5,8 +5,9 @@ import psutil
 from typing import Dict, Any
 from fastapi import Response
 from util.logging import log
+from src import __version__
 
-def handler():
+def handler():# -> dict[str, Any]:
     """
     Endpoint to get program and system statistics
     Returns system info, resource usage, and runtime metrics
@@ -36,6 +37,16 @@ def handler():
             "pid": os.getpid(),
             "memory_usage": psutil.Process(os.getpid()).memory_info().rss,
             "cpu_usage": psutil.Process(os.getpid()).cpu_percent()
+        },
+        "program": {
+            "version": __version__,
+            "python_executable": sys.executable,
+            "python_path": sys.path,
+            "start_time": psutil.Process(os.getpid()).create_time()
+        },
+        "runtime": {
+            "uptime": psutil.boot_time(),
+            "current_time": psutil.Process(os.getpid()).create_time()
         }
     }
     

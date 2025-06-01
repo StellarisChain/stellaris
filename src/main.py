@@ -48,7 +48,7 @@ class Main:
         self.logger.info(f"Validated configuration: {self.validated_config}")
         self.app = FastAPI(
             title="VoxaCommunications-NetNode", 
-            summary="https://github.com/Voxa-Communications/",
+            summary=file_to_str("summary.txt"),
             description=file_to_str("README.md"), 
             version=__version__,
             license_info={
