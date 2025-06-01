@@ -14,10 +14,10 @@ source .venv/bin/activate
 echo "Installing requirements..."
 python -m pip install -r requirements.txt
 
-# Set PYTHONPATH to include project root and src directory
+# Set PYTHONPATH to include both project root and src directory
 export PYTHONPATH="${PYTHONPATH}:$(pwd):$(pwd)/src"
 
-# Run the application with uvicorn from the project root
+# Run the application with uvicorn
 echo "Starting FastAPI application with uvicorn..."
 uvicorn src.main:app --host 0.0.0.0 --port 9000 --reload
 

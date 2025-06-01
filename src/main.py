@@ -59,17 +59,22 @@ class Main:
         self.internal_router.add_to_app(self.app)
 
 
+# Configure logging for module-level initialization
+log_id = str(uuid.uuid4())
+set_log_config(log_id)
+logger_instance = log()
+
+# Initialize main application class and expose the app
+main_app = Main(logger_instance)
+app = main_app.app  # Expose the FastAPI app for uvicorn
+
+
 if __name__ == "__main__":
     print(Fore.GREEN + "Initializing application...")
 
-    # Configure logging
-    log_id = str(uuid.uuid4())
-    set_log_config(log_id)
-    logger_instance = log()
-
     try:
-        # Initialize main application class
-        main_app = Main(logger_instance)
+        # App is already initialized above
+        pass
 
     except Exception as error:
         logger_instance.error(
