@@ -1,0 +1,35 @@
+{
+    "timeout": 3.0,
+    "max_workers": 50,
+    "cache_duration": 300,
+    "auto_discovery_interval": 600,
+    "auto_save_to_storage": true,
+    "networks": null,
+    "node_ports": [9000],
+    "relay_ports": [8080, 8081, 8082, 3000, 5000, 7000, 8000, 9001, 9002],
+    "discovery_enabled": true,
+    "scan_local_only": true,
+    "allow_public_ip_discovery": false,
+    "public_ip_ranges": [
+        "203.0.113.0/24",
+        "198.51.100.0/24"
+    ],
+    "max_public_hosts_per_range": 1000,
+    "public_discovery_warning": true,
+    "rate_limit_public_scans": true,
+    "public_scan_delay_ms": 100,
+    "_comment_public_ranges": "Example public IP ranges - RFC 5737 test ranges",
+    "_comment_security": "ONLY enable public IP discovery if you have explicit permission to scan these ranges",
+    "_comment_examples": {
+        "cloud_provider_ranges": [
+            "52.0.0.0/16",
+            "54.0.0.0/16"
+        ],
+        "university_ranges": [
+            "128.0.0.0/16"
+        ],
+        "small_public_ranges": [
+            "203.0.113.0/28"
+        ]
+    }
+}
