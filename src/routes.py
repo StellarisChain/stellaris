@@ -73,8 +73,20 @@ class InternalRouter:
                             # Register the handler function with the router
                             handler_func = getattr(module, 'handler')
                             endpoint_path = f"/{module_name}/"
-                            sub_router.add_api_route(endpoint_path, handler_func)
-                            self.logger.info(f"Registered endpoint {endpoint_path} for {full_module_path}")
+                            
+                            # Determine HTTP method based on module name
+                            if module_name.startswith('add_'):
+                                # POST method for add operations
+                                sub_router.add_api_route(endpoint_path, handler_func, methods=["POST"])
+                                self.logger.info(f"Registered POST endpoint {endpoint_path} for {full_module_path}")
+                            elif module_name.startswith('fetch_') or module_name.startswith('get_'):
+                                # GET method for fetch/get operations  
+                                sub_router.add_api_route(endpoint_path, handler_func, methods=["GET"])
+                                self.logger.info(f"Registered GET endpoint {endpoint_path} for {full_module_path}")
+                            else:
+                                # Default to GET for other endpoints
+                                sub_router.add_api_route(endpoint_path, handler_func, methods=["GET"])
+                                self.logger.info(f"Registered GET endpoint {endpoint_path} for {full_module_path}")
                         else:
                             self.logger.warning(f"No handler function found in {full_module_path}")
                             

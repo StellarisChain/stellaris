@@ -16,6 +16,7 @@ from colorama import init, Fore, Style
 from kvprocessor import KVProcessor, KVStructLoader, LoadEnv
 from util.logging import log, set_log_config
 from util.filereader import file_to_str
+from util.setuputils import setup_directories
 from src import __version__
 
 # Load environment variables and initialize colorama
@@ -45,6 +46,7 @@ class Main:
         self.validated_config = self.env_kv_processor.process_config(
             self.env_config
         )
+        setup_directories()
         self.logger.info(f"Validated configuration: {self.validated_config}")
         self.app = FastAPI(
             title="VoxaCommunications-NetNode", 

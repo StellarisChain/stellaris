@@ -9,3 +9,4 @@ install-docker.sh
 secret.txt
 # Will be rewritten
 TESTING.md
+/data
