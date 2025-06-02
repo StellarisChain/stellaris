@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, List
 from schema.BaseRISchema import BaseRISchema
 import re
 
-class NRISchema(BaseModel, BaseRISchema):
+class NRISchema(BaseModel):
     """Schema for Node Routing Information (NRI) requests"""
     
     node_id: str

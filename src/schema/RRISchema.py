@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, List
 from schema.BaseRISchema import BaseRISchema
 import re
 
-class RRISchema(BaseModel, BaseRISchema):
+class RRISchema(BaseModel):
     """Schema for Relay Routing Information (RRI) requests"""
     
     relay_id: str
