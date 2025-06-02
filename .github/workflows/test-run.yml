@@ -21,7 +21,7 @@ jobs:
         python-version: '3.12'
         
     - name: Test application startup
-      run: bash /tests/test_startup.sh
+      run: bash tests/test_startup.sh
       timeout-minutes: 5
       
     - name: Verify configuration files exist
