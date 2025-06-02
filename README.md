@@ -23,7 +23,7 @@ VoxaCommunications aims to create a fast, secure, and decentralized network for 
    - Implementing request splitting with hash verification.
    - Designing Node routing logic or crypto chain consensus.
    - Writing tests for Relay pings.
-3. Join our [Telegram](https://t.me/voxacommunications) [Discord](https://discord.gg/EDtPX5E4D4) to discuss ideas and collaborate.
+3. Join our [Telegram](https://t.me/voxacommunications) | [Discord](https://discord.gg/EDtPX5E4D4) to discuss ideas and collaborate.
 4. Open an Issue to suggest features or report bugs.
 
 ## Current Priorities
