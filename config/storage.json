@@ -1,0 +1,7 @@
+{
+    "data-dir": "/data/",
+    "sub-dirs": {
+        "nri": "nri/",
+        "rri": "rri/"
+    }
+}

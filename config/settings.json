@@ -11,8 +11,5 @@
         "enable-wallet-management": true,
         "enable-smart-contracts": false,
         "enable-multi-signature": false
-    },
-    "files": {
-        "data-dir": "/data/"
     }
 }
