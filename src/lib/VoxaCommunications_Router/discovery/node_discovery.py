@@ -9,8 +9,8 @@ import asyncio
 from typing import List, Dict, Optional, Any, Set
 from datetime import datetime, timedelta
 import json
-from VoxaCommunications_Router.discovery.network_scanner import NetworkScanner
-from VoxaCommunications_Router.util.logging import log
+from lib.VoxaCommunications_Router.discovery.network_scanner import NetworkScanner
+from lib.VoxaCommunications_Router.util.logging import log
 
 class NodeDiscovery:
     """

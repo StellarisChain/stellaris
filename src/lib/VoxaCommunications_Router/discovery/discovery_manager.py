@@ -9,11 +9,11 @@ import asyncio
 from typing import List, Dict, Optional, Any, Set, Tuple
 from datetime import datetime, timedelta
 import json
-from VoxaCommunications_Router.discovery.network_scanner import NetworkScanner
-from VoxaCommunications_Router.discovery.node_discovery import NodeDiscovery
-from VoxaCommunications_Router.discovery.relay_discovery import RelayDiscovery
-from VoxaCommunications_Router.util.logging import log
-from VoxaCommunications_Router.util.jsonreader import read_json_from_namespace
+from lib.VoxaCommunications_Router.discovery.network_scanner import NetworkScanner
+from lib.VoxaCommunications_Router.discovery.node_discovery import NodeDiscovery
+from lib.VoxaCommunications_Router.discovery.relay_discovery import RelayDiscovery
+from lib.VoxaCommunications_Router.util.logging import log
+from lib.VoxaCommunications_Router.util.jsonreader import read_json_from_namespace
 
 class DiscoveryManager:
     """

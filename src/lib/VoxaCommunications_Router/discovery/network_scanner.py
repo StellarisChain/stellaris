@@ -13,7 +13,7 @@ from typing import List, Dict, Set, Optional, Tuple, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import httpx
-from VoxaCommunications_Router.util.logging import log
+from lib.VoxaCommunications_Router.util.logging import log
 
 
 class NetworkScanner:
