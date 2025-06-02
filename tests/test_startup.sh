@@ -42,7 +42,7 @@ SERVER_PID=$!
 sleep 10
 
 # Test if server is responding
-if curl -f http://$HOST:$PORT/health 2>/dev/null || curl -f http://$HOST:$PORT/ 2>/dev/null; then
+if curl -f http://$HOST:$PORT/status/health 2>/dev/null || curl -f http://$HOST:$PORT/info/program_stats 2>/dev/null; then
     echo "✅ Server started successfully and is responding"
     kill $SERVER_PID
     exit 0
