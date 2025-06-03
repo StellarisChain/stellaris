@@ -42,7 +42,7 @@ def handler(request: Request, nri_data: NRISchema):
     
     try:
         # Get storage configuration
-        storage_config = read_json_from_namespace("config.storage")
+        storage_config: dict = read_json_from_namespace("config.storage")
         if not storage_config:
             raise HTTPException(status_code=500, detail="Storage configuration not found")
         

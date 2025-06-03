@@ -17,7 +17,7 @@ def read_json_file(file_path):
     with io.open(file_path, 'r', encoding='utf-8') as file:
         return json.load(file)
     
-def read_json_from_namespace(namespace: str):
+def read_json_from_namespace(namespace: str) -> dict:
     #ex config.settings is config/settings.json
     namespace = namespace.strip().replace(".", "/") + ".json"
     return read_json_file(namespace)
