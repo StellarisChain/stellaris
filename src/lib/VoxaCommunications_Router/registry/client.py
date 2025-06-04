@@ -39,15 +39,17 @@ class RegistryClient:
         if code is not None:
             self.credentials["code"] = code
     
-    def register_node(self, callsign: str, node_ip: str, node_type: str = "node"):
+    def register_node(self, callsign: str, node_ip: Optional[str] = None, node_type: str = "node"):
+        request_json = {
+            "name": callsign,
+            "type": node_type
+        }
+        if node_ip is not None:
+            request_json["ip"] = node_ip
         if (self.credentials != {} or None) and self.session_token != "":
             request = requests.post(
                 f"{self.base_url}login",
-                json = {
-                    "name": callsign,
-                    "ip": node_ip,
-                    "type": node_type
-                },
+                json = request_json,
                 headers = {
                     "Authorization": f"Bearer {self.session_token}",
                     "Content-Type": "application/json"

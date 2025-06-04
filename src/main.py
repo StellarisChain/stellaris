@@ -17,6 +17,7 @@ from kvprocessor import KVProcessor, KVStructLoader, LoadEnv
 from util.logging import log, set_log_config
 from util.filereader import file_to_str
 from util.setuputils import setup_directories
+from util.initnode import init_node
 from stores.globalconfig import set_global_config
 from stores.registrycontroller import set_global_registry_manager
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
@@ -40,7 +41,7 @@ class Main:
         )
         self.struct_loader = KVStructLoader(struct_loader_url)
         self.env_kv_processor: KVProcessor = self.struct_loader.from_namespace(
-            "voxa.node.config"
+            "voxa.config.node_config"
         )
         self.env_config = LoadEnv(self.env_kv_processor.return_names())
         self.logger.info(
@@ -64,6 +65,7 @@ class Main:
         self.internal_router = InternalRouter()
         self.internal_router.add_to_app(self.app)
         if os.getenv("env") == "production":
+            self.logger.info(f"Logging in to registry, with email: {self.validated_config.get('email')}")
             self.registry_manager: RegistryManager = RegistryManager(client_type="node")
             self.registry_manager.set_credentials(
                 email=self.validated_config.get("email"),
@@ -76,7 +78,10 @@ class Main:
                     "Failed to log in to the registry. Please check your credentials."
                 )
                 raise Exception("Registry login failed")
+            else:
+                self.logger.info("Successfully logged in to the registry.")
             set_global_registry_manager(self.registry_manager)
+            init_node()
 
 
 # Configure logging for module-level initialization

@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from lib.VoxaCommunications_Router.registry.client import RegistryClient
 from lib.compression import JSONCompressor
@@ -13,12 +14,12 @@ def init_node():
     logger.info("Initializing Voxa Node...")
 
     try:
-        storage_config = read_json_from_namespace("config.storage")
+        storage_config: dict = read_json_from_namespace("config.storage")
         if not storage_config:
             logger.error("Storage configuration not found. Please ensure 'config.storage' is set up correctly.")
             return
         data_dir = storage_config.get("data-dir", "data/")
-        nri_subdir = storage_config.get("sub-dirs", {}).get("local", "local/")
+        nri_subdir = dict(storage_config.get("sub-dirs", {})).get("local", "local/")
         nri_dir = os.path.join(data_dir, nri_subdir)
 
         if not os.path.exists(nri_dir):
@@ -31,9 +32,17 @@ def init_node():
             logger.info(f"NRI file found at {nri_file_path}. Initializing registry...")
             return
         
+        # session would only exist if we have logged in, if not, login
         registry_manager: RegistryManager = get_global_registry_manager()
         if registry_manager.session_token == "":
             registry_manager.login()
+
+        # register the node to the network
+        node_settings: dict = read_json_from_namespace("config.settings")
+        registry_manager.client.register_node(
+            callsign = f"{node_settings.get("node-network-level", "mainnet")}-{str(uuid.uuid4())}",
+            node_type = "node" # idk why this even exists as we know this is a node
+        )
 
     except Exception as e:
         logger.error(f"Failed to read storage configuration: {e}")
