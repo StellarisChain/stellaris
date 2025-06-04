@@ -63,19 +63,20 @@ class Main:
         )
         self.internal_router = InternalRouter()
         self.internal_router.add_to_app(self.app)
-        self.registry_manager: RegistryManager = RegistryManager(client_type="node")
-        self.registry_manager.set_credentials(
-            email=self.validated_config.get("email"),
-            password=self.validated_config.get("password"),
-            code=self.validated_config.get("code")
-        )
-        login_success = self.registry_manager.login()
-        if not login_success:
-            self.logger.error(
-                "Failed to log in to the registry. Please check your credentials."
+        if os.getenv("env") == "production":
+            self.registry_manager: RegistryManager = RegistryManager(client_type="node")
+            self.registry_manager.set_credentials(
+                email=self.validated_config.get("email"),
+                password=self.validated_config.get("password"),
+                code=self.validated_config.get("code")
             )
-            raise Exception("Registry login failed")
-        set_global_registry_manager(self.registry_manager)
+            login_success = self.registry_manager.login()
+            if not login_success:
+                self.logger.error(
+                    "Failed to log in to the registry. Please check your credentials."
+                )
+                raise Exception("Registry login failed")
+            set_global_registry_manager(self.registry_manager)
 
 
 # Configure logging for module-level initialization
