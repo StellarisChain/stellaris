@@ -11,7 +11,7 @@ class NRISchema(BaseModel):
     node_port: int
     node_type: str = "standard"
     capabilities: List[str] = []
-    routing_table: Dict[str, Any] = {}
+    # routing_table: Dict[str, Any] = {}
     metadata: Optional[Dict[str, Any]] = {}
     
     @validator('node_id')

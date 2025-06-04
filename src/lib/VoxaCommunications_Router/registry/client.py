@@ -19,6 +19,7 @@ class RegistryClient:
             "user_id": None,
             "relay_id": None
         }
+        self.node_ip = None
 
     def set_credentials(self, email: Optional[str] = None, password: Optional[str] = None, token: Optional[str] = None, code: Optional[str] = None):
         """
@@ -59,6 +60,7 @@ class RegistryClient:
                 response: dict = request.json()
                 self.ids["node_id"] = response.get("node_id", "")
                 self.ids["user_id"] = response.get("registered", "")
+                self.node_ip = response.get("node_ip", node_ip)
                 return True
             else:
                 print(f"Login failed: {request.text}")
