@@ -35,3 +35,6 @@ VoxaCommunications aims to create a fast, secure, and decentralized network for 
 Attribution-NonCommercial-ShareAlike 4.0 International
 
 Let’s build the future of decentralized communication together! 🚀
+
+---
+Support: `voxa@connor33341.dev`
