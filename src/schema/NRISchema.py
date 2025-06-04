@@ -37,7 +37,7 @@ class NRISchema(BaseModel):
     
     @validator('node_type')
     def validate_node_type(cls, v):
-        allowed_types = ['standard', 'relay', 'gateway', 'bridge']
+        allowed_types = ['standard', 'relay', 'gateway', 'bridge', "node"]
         if v not in allowed_types:
             raise ValueError(f'Node type must be one of: {", ".join(allowed_types)}')
         return v

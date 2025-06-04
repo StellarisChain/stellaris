@@ -49,14 +49,14 @@ class RegistryClient:
             request_json["ip"] = node_ip
         if (self.credentials != {} or None) and self.session_token != "":
             request = requests.post(
-                f"{self.base_url}login",
+                f"{self.base_url}register_node",
                 json = request_json,
                 headers = {
                     "Authorization": f"Bearer {self.session_token}",
                     "Content-Type": "application/json"
                 }
             )
-            if request.status_code == 200:
+            if request.status_code == 201:
                 response: dict = request.json()
                 self.ids["node_id"] = response.get("node_id", "")
                 self.ids["user_id"] = response.get("registered", "")
