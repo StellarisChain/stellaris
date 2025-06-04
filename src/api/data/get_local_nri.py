@@ -10,7 +10,7 @@ from util.jsonreader import read_json_from_namespace
 from util.logging import log
 from schema.NRISchema import NRISchema
 
-def handler(self):
+def handler():
     """
     Handle fetching Node Routing Information (NRI).
         
