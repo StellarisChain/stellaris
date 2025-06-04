@@ -14,6 +14,11 @@ class RegistryClient:
             "code": None
         }
         self.session_token = ""
+        self.ids = {
+            "node_id": None,
+            "user_id": None,
+            "relay_id": None
+        }
 
     def set_credentials(self, email: Optional[str] = None, password: Optional[str] = None, token: Optional[str] = None, code: Optional[str] = None):
         """
@@ -34,11 +39,34 @@ class RegistryClient:
         if code is not None:
             self.credentials["code"] = code
     
+    def register_node(self, callsign: str, node_ip: str, node_type: str = "node"):
+        if (self.credentials != {} or None) and self.session_token != "":
+            request = requests.post(
+                f"{self.base_url}login",
+                json = {
+                    "name": callsign,
+                    "ip": node_ip,
+                    "type": node_type
+                },
+                headers = {
+                    "Authorization": f"Bearer {self.session_token}",
+                    "Content-Type": "application/json"
+                }
+            )
+            if request.status_code == 200:
+                response: dict = request.json()
+                self.ids["node_id"] = response.get("node_id", "")
+                self.ids["user_id"] = response.get("registered", "")
+                return True
+            else:
+                print(f"Login failed: {request.text}")
+                return False
+    
     def login(self):
         if self.credentials != {} or None:
             request = requests.post(
                 f"{self.base_url}login",
-                json={
+                json = {
                     "email": self.credentials["email"],
                     "password": self.credentials["password"],
                     #"token": self.credentials["token"], # Cannot use tokens yet
@@ -46,7 +74,7 @@ class RegistryClient:
                 }
             )
             if request.status_code == 200:
-                response = request.json()
+                response: dict = request.json()
                 self.session_token = response.get("token", "")
                 return True
             else:
