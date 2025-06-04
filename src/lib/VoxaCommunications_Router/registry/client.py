@@ -2,7 +2,7 @@ import requests
 from typing import Optional
 
 class RegistryClient:
-    def __init__(self, client_type: str = "relay" | "node" | "user" | "other", registry_url: str = "https://voxa-registry.connor33341.dev/", api_version: str = "v1", credentials: Optional[dict] = None):
+    def __init__(self, client_type: str = "relay", registry_url: str = "https://voxa-registry.connor33341.dev/", api_version: str = "v1", credentials: Optional[dict] = None):
         self.client_type = client_type
         self.registry_url = registry_url
         self.api_version = api_version
@@ -71,11 +71,12 @@ class RegistryClient:
                     "password": self.credentials["password"],
                     #"token": self.credentials["token"], # Cannot use tokens yet
                     "code": self.credentials["code"]
-                }
+                },
             )
             if request.status_code == 200:
                 response: dict = request.json()
                 self.session_token = response.get("token", "")
+                self.ids["user_id"] = response.get("user_id", "")
                 return True
             else:
                 print(f"Login failed: {request.text}")

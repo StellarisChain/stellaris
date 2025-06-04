@@ -8,7 +8,7 @@ class RegistryManager:
     registry_url: str = "https://voxa-registry.connor33341.dev/"
     api_version: str = "v1"
 
-    def __init__(self, client_type: str = "relay" | "node" | "user" | "other"):
+    def __init__(self, client_type: str = "relay"):
         self.client_type = client_type
         self.client = RegistryClient(client_type=client_type, registry_url=self.registry_url, api_version=self.api_version)
         self.session_token = ""

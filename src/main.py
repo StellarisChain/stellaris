@@ -17,6 +17,9 @@ from kvprocessor import KVProcessor, KVStructLoader, LoadEnv
 from util.logging import log, set_log_config
 from util.filereader import file_to_str
 from util.setuputils import setup_directories
+from stores.globalconfig import set_global_config
+from stores.registrycontroller import set_global_registry_manager
+from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from src import __version__
 
 # Load environment variables and initialize colorama
@@ -48,6 +51,7 @@ class Main:
         )
         setup_directories()
         self.logger.info(f"Validated configuration: {self.validated_config}")
+        set_global_config(self.validated_config)
         self.app = FastAPI(
             title="VoxaCommunications-NetNode", 
             summary=file_to_str("summary.txt"),
@@ -59,6 +63,19 @@ class Main:
         )
         self.internal_router = InternalRouter()
         self.internal_router.add_to_app(self.app)
+        self.registry_manager: RegistryManager = RegistryManager(client_type="node")
+        self.registry_manager.set_credentials(
+            email=self.validated_config.get("email"),
+            password=self.validated_config.get("password"),
+            code=self.validated_config.get("code")
+        )
+        login_success = self.registry_manager.login()
+        if not login_success:
+            self.logger.error(
+                "Failed to log in to the registry. Please check your credentials."
+            )
+            raise Exception("Registry login failed")
+        set_global_registry_manager(self.registry_manager)
 
 
 # Configure logging for module-level initialization
