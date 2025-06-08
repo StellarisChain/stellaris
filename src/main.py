@@ -14,12 +14,14 @@ from fastapi import FastAPI
 from routes import InternalRouter
 from colorama import init, Fore, Style
 from kvprocessor import KVProcessor, KVStructLoader, LoadEnv
+from kytan import create_client, create_server, KytanError, KytanContextManager
 from util.logging import log, set_log_config
 from util.filereader import file_to_str
 from util.setuputils import setup_directories
 from util.initnode import init_node
 from stores.globalconfig import set_global_config
 from stores.registrycontroller import set_global_registry_manager
+from stores.kytancontroller import KytanController, set_kytan_controller
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from src import __version__
 
@@ -64,6 +66,11 @@ class Main:
         )
         self.internal_router = InternalRouter()
         self.internal_router.add_to_app(self.app)
+        self.logger.info("Setting up Kytan")
+        self.kytan_controller: KytanController = KytanController()
+        self.kytan_controller.set_server(create_server())
+        set_kytan_controller(self.kytan_controller)
+        self.logger.info("Kytan server created")
         if os.getenv("env") == "production":
             self.logger.info(f"Logging in to registry, with email: {self.validated_config.get('email')}")
             self.registry_manager: RegistryManager = RegistryManager(client_type="node")

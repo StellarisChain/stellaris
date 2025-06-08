@@ -10,6 +10,7 @@
         "enable-network-sync": true,
         "enable-wallet-management": true,
         "enable-smart-contracts": false,
-        "enable-multi-signature": false
+        "enable-multi-signature": false,
+        "enable-kytan-vpn": true
     }
 }

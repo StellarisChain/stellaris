@@ -11,3 +11,4 @@ dotenv
 rsa
 psutil
 fastapi[standard]
+kytan-py
