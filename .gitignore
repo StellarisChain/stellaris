@@ -10,3 +10,5 @@ secret.txt
 # Will be rewritten
 TESTING.md
 /data
+build
+dist
