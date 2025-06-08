@@ -13,7 +13,7 @@ import time
 from fastapi import FastAPI
 from routes import InternalRouter
 from colorama import init, Fore, Style
-from kvprocessor import KVProcessor, KVStructLoader, LoadEnv
+from kvprocessor import KVProcessor, KVStructLoader, load_env
 from kytan import create_client, create_server, KytanError, KytanContextManager
 from util.logging import log, set_log_config
 from util.filereader import file_to_str
@@ -45,7 +45,7 @@ class Main:
         self.env_kv_processor: KVProcessor = self.struct_loader.from_namespace(
             "voxa.config.node_config"
         )
-        self.env_config = LoadEnv(self.env_kv_processor.return_names())
+        self.env_config = load_env(self.env_kv_processor.return_names())
         self.logger.info(
             f"Loading environment variables: {list(self.env_config.keys())}"
         )
