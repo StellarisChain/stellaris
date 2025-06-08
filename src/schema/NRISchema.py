@@ -13,6 +13,11 @@ class NRISchema(BaseModel):
     capabilities: List[str] = []
     # routing_table: Dict[str, Any] = {}
     metadata: Optional[Dict[str, Any]] = {}
+    public_key: Optional[str] = None
+    public_key_hash: Optional[str] = None
+    fernet_key: Optional[str] = None
+    fernet_key_hash: Optional[str] = None
+    program_version: Optional[str] = None
     
     @validator('node_id')
     def validate_node_id(cls, v):

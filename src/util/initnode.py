@@ -1,3 +1,4 @@
+# Todo, this should be moved into a class and in the VoxaCommunications_Router package
 import json
 import os
 import uuid
@@ -6,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, validator, ValidationError
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from lib.VoxaCommunications_Router.registry.client import RegistryClient
+from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.compression import JSONCompressor
 from stores.registrycontroller import get_global_registry_manager, set_global_registry_manager
 from util.logging import log
@@ -50,6 +52,11 @@ def init_node():
         )
         node_id = registry_manager.client.ids.get("node_id")
 
+        # Generate RSA keys for the node
+        rsa_generator = RSAKeyGenerator()
+        rsa_generator.generate_keys()
+        rsa_keys = rsa_generator.get_keys()
+
         # Create local NRI data
         nri_data: dict = NRISchema(
             node_id=node_id,
@@ -57,7 +64,9 @@ def init_node():
             node_port=p2p_settings.get("port", 9000), # 9000 should be standard for nodes
             node_type="node",
             capabilities=["routing", "forwarding"],
-            metadata={"location": "datacenter-1"}
+            metadata={"location": "datacenter-1"},
+            public_key=rsa_keys["public_key"],
+            public_key_hash=rsa_keys["public_key_hash"]
         ).dict()
         nri_data["created_at"] = datetime.utcnow().isoformat()
         nri_data["last_updated"] = datetime.utcnow().isoformat()
