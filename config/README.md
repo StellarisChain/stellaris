@@ -1,4 +1,4 @@
-### This will be expanded in the future, for now here is the documentaion of some of the settings.
+### This will be expanded in the future, for now here is the documentation of some of the settings.
 
 `storage.json`
  - `data-dir`: where all sub-dirs will exist at
