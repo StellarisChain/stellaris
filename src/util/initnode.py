@@ -19,6 +19,8 @@ def init_node():
     logger = log()
     logger.info("Initializing Voxa Node...")
 
+    raise DeprecationWarning("Use RIManager from lib.VoxaCommunications_Router.ri.ri_manager instead of this function.")
+
     try:
         storage_config: dict = read_json_from_namespace("config.storage")
         if not storage_config:

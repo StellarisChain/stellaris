@@ -19,11 +19,12 @@ from kytan import create_client, create_server, KytanError, KytanContextManager
 from util.logging import log, set_log_config
 from util.filereader import file_to_str
 from util.setuputils import setup_directories
-from util.initnode import init_node
+#from util.initnode import init_node
 from stores.globalconfig import set_global_config
 from stores.registrycontroller import set_global_registry_manager
 from stores.kytancontroller import KytanController, set_kytan_controller, initialize_kytan_controller
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
+from lib.VoxaCommunications_Router.ri.ri_manager import RIManager
 from src import __version__
 
 # Load environment variables and initialize colorama
@@ -155,7 +156,14 @@ class Main:
             
             self.logger.info("Successfully logged in to the registry")
             set_global_registry_manager(self.registry_manager)
-            init_node()
+            
+            self.ri_manager: RIManager = RIManager(type="node")
+            self.ri_manager.login()
+
+            if not self.ri_manager.initialized:
+                self.logger.info("RI not initialized, initializing now...")
+                self.ri_manager.initialize()
+                self.logger.info("RI initialization completed")
             
         except Exception as e:
             self.logger.error(f"Failed to setup registry: {e}")
