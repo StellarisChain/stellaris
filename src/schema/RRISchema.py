@@ -13,6 +13,11 @@ class RRISchema(BaseModel):
     supported_protocols: List[str] = []
     routing_info: Dict[str, Any] = {}
     metadata: Optional[Dict[str, Any]] = {}
+    public_key: Optional[str] = None
+    public_key_hash: Optional[str] = None
+    fernet_key: Optional[str] = None
+    fernet_key_hash: Optional[str] = None
+    program_version: Optional[str] = None
     
     @validator('relay_id')
     def validate_relay_id(cls, v):
