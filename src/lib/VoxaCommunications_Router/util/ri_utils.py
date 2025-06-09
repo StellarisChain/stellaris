@@ -4,6 +4,8 @@ from typing import Optional, Dict, Any
 from util.jsonreader import read_json_from_namespace
 from util.logging import log
 from lib.compression import JSONCompressor
+from schema.RRISchema import RRISchema
+from schema.NRISchema import NRISchema
 
 def fetch_ri(file_name, path: Optional[str] = "local") -> dict:
     """
@@ -151,3 +153,76 @@ def save_ri(file_name: str, data: Dict[Any, Any], path: Optional[str] = "local")
             "success": False,
             "error": f"Save operation failed: {e}"
         }
+    
+def load_all_ri(path: Optional[str] = "local") -> dict:
+    """
+    Load all Node Routing Information (NRI) files from the specified path.
+    
+    Args:
+        path (str, optional): Storage path subdirectory. Defaults to "local".
+        
+    Returns:
+        dict: A dictionary containing all loaded NRI data.
+    """
+    
+    logger = log()
+    logger.info(f"Loading all local NRI data from {path}")
+    
+    # Get storage configuration
+    storage_config: dict = read_json_from_namespace("config.storage")
+    if not storage_config:
+        logger.error("Storage configuration not found")
+        return {}
+    
+    # Construct the NRI directory path
+    data_dir = storage_config.get("data-dir", "data/")
+    nri_subdir = dict(storage_config.get("sub-dirs", {})).get(path, "local/")
+    nri_dir = os.path.join(data_dir, nri_subdir)
+    
+    # Ensure the NRI directory exists
+    if not os.path.exists(nri_dir):
+        logger.warning(f"NRI directory does not exist: {nri_dir}")
+        return {}
+    
+    nri_data = {}
+    
+    # Iterate through all files in the NRI directory
+    for file_name in os.listdir(nri_dir):
+        if file_name.endswith(".bin"):
+            file_path = os.path.join(nri_dir, file_name)
+            try:
+                result = fetch_ri(file_name[:-4], path=path)  # Remove .bin extension
+                if result and result.get("success"):
+                    nri_data[file_name[:-4]] = result["file_info"]["data"]
+            except Exception as e:
+                logger.error(f"Failed to load {file_name}: {e}")
+    
+    logger.info(f"Loaded {len(nri_data)} NRI files from {nri_dir}")
+    
+    return nri_data
+
+def ri_list(path: Optional[str] = "local", duplicates: Optional[bool] = False):
+    ri_dict: dict = load_all_ri(path)
+    ri_list = []
+    if not ri_dict:
+        return None
+    
+    # Iterate over the list, and create one big list of data
+    for key, value in ri_dict.items():
+        ri_list.append(value)
+
+    if not duplicates:
+        ri_temp_dict: dict = {}
+        # Very crude method to remove duplicates based on IP address
+        for i in range(len(ri_list)):
+            ri_data: dict = ri_list[i]
+            schema = RRISchema if path == "rri" else NRISchema
+            ri_data: RRISchema | NRISchema = schema(**ri_data)
+            # IP is a more useful identifier than the node_id, so we use that
+            if isinstance(ri_data, NRISchema):
+                ri_temp_dict[ri_data.node_ip] = ri_data.dict()
+            elif isinstance(ri_data, RRISchema):
+                ri_temp_dict[ri_data.relay_ip] = ri_data.dict()
+        ri_list = list(ri_temp_dict.values())
+    
+    return ri_list
