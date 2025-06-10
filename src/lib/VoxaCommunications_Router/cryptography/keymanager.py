@@ -5,6 +5,7 @@ import base64
 import json
 import uuid
 import os
+import traceback
 from typing import Optional
 from cryptography.fernet import Fernet
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
@@ -165,25 +166,32 @@ class KeyManager:
                 return {}
             
             file_name = "nri" if self.mode == "node" else "rri"  # if node then nri if relay then rri
-            
+            ri_data: dict = {}
             # Fetch and update RI data
             try:
-                ri_result = fetch_ri(f"{file_name}", path="local").get("file_info")
+                ri_result: dict = fetch_ri(f"{file_name}", path="local").get("file_info")
                 if not ri_result:
                     self.logger.warning(f"No existing RI data found for {file_name}, creating new")
                     ri_data = {}
                 else:
-                    ri_data = ri_result.get("data")
+                    ri_data: dict = ri_result.get("data")
             except Exception as e:
                 self.logger.warning(f"Failed to fetch existing RI data: {str(e)}, creating new")
                 ri_data = {}
             
+            if isinstance(ri_data, str):
+                ri_data = json.loads(ri_data)  # Ensure ri_data is a dictionary
+
+            #self.logger.warning(type(ri_data))
+            #self.logger.warning(ri_data)
+
             # Update and save RI data
             try:
                 ri_data["public_key"] = self.rsa_keys.get("public_key")
                 save_ri(f"{file_name}", ri_data, path="local")
             except Exception as e:
                 self.logger.error(f"Failed to save RI data: {str(e)}")
+                traceback.print_exception(type(e), e, e.__traceback__)
                 return {}
             
             # Save private key
@@ -206,4 +214,5 @@ class KeyManager:
             
         except Exception as e:
             self.logger.error(f"Unexpected error saving RSA keys: {str(e)}")
+            traceback.print_exception(type(e), e, e.__traceback__)
             return {}
