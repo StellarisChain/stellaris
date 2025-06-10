@@ -15,7 +15,7 @@ def _create_route(rri: dict) -> Route:
         **rri,  # Unpack the RRI data into the Route
     )
 
-def generate_relay_map(max_workers: Optional[int] = None) -> RoutingMap:
+def generate_relay_map(max_workers: Optional[int] = None, max_map_size: Optional[int] = 50) -> RoutingMap:
     """
     Generate a routing map for relays using multi-threading.
     
@@ -25,6 +25,7 @@ def generate_relay_map(max_workers: Optional[int] = None) -> RoutingMap:
     
     Args:
         max_workers: Maximum number of worker threads. If None, defaults to min(32, (os.cpu_count() or 1) + 4)
+        max_map_size: Maximum number of routes to include in the routing map. Defaults to 50.
     """
     rri_list_data = ri_list(path="rri", duplicates=False) # Fetch relay RI list, with no duplicates
     if not rri_list_data:
@@ -54,6 +55,9 @@ def generate_relay_map(max_workers: Optional[int] = None) -> RoutingMap:
     # Shuffle the routes to create a pseudo random routing map
     # Todo: Implement a more sophisticated shuffling algorithm if needed
     random.shuffle(temp_routing_map)
+
+    # Limit the number of routes to max_map_size
+    temp_routing_map = temp_routing_map[:max_map_size]
 
     # Convert first route to dict and set as root
     routing_map.routes = temp_routing_map[0].dict()
