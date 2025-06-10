@@ -30,6 +30,14 @@ class KeyManager:
         return (self._keys_exist and 
                 bool(self.rsa_keys.get("public_key")) and 
                 bool(self.rsa_keys.get("private_key")))
+    
+    def set_rsa_keys(self, public_key: Optional[str] = None, private_key: Optional[str] = None) -> dict:
+        """Set RSA keys directly, useful for testing or manual key management."""
+        self.rsa_keys["public_key"] = public_key
+        self.rsa_keys["private_key"] = private_key
+        self._keys_exist = True
+        self.logger.info("RSA keys set successfully.")
+        return self.rsa_keys
 
     def load_rsa_keys(self) -> dict:
         """Load RSA keys from storage with comprehensive error handling."""

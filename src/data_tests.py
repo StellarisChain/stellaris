@@ -6,6 +6,7 @@ import sys
 import os
 from lib.VoxaCommunications_Router.util.ri_utils import save_ri
 from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
+from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from schema.RRISchema import RRISchema
 
 def generate_random_ip() -> str:
@@ -15,6 +16,8 @@ def generate_random_ip() -> str:
 # Clear your RRI after doing this, if you are using a production environment
 def generate_test_rri_data(count: int = 10) -> None:
     for _ in range(count):
+        key_generator = RSAKeyGenerator()
+        public_key, private_key = key_generator.generate_keys()["public_key"], key_generator.generate_keys()["private_key"]
         rri_data = RRISchema(
             relay_id=str(uuid.uuid4()),
             relay_ip=generate_random_ip(),
@@ -22,7 +25,7 @@ def generate_test_rri_data(count: int = 10) -> None:
             relay_type="standard",
             capabilities=["routing", "forwarding"],
             metadata={"location": "datacenter-1"},
-            public_key=f"none",
+            public_key=public_key,
             public_key_hash=f"none"
         ).dict()
         save_ri(str(uuid.uuid4()), rri_data, "rri")
