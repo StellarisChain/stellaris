@@ -7,6 +7,7 @@ from lib.VoxaCommunications_Router.registry.registry_manager import RegistryMana
 from lib.VoxaCommunications_Router.registry.client import RegistryClient
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.cryptography.keymanager import KeyManager
+from lib.VoxaCommunications_Router.util.ri_utils import fetch_ri, save_ri
 from lib.compression import JSONCompressor
 from stores.registrycontroller import get_global_registry_manager, set_global_registry_manager
 from schema.RRISchema import RRISchema
@@ -90,14 +91,9 @@ class RIManager:
         nri_data["last_updated"] = datetime.utcnow().isoformat()
         nri_data["version"] = str(__version__)
         json_data = json.dumps(nri_data, indent=2, ensure_ascii=False)
-        compressor = JSONCompressor()
-        compressed_data = compressor.compress(json_data)
-        file_path = os.path.join(self.local_dir, "nri.bin")
-        #self.logger.warning(f"Initializing node with NRI data at {file_path}")
-        with open(file_path, 'wb') as f:
-            f.write(compressed_data)
+        save_ri("nri", json_data, path="local")
         key_manager.save_rsa_keys() # Have to do this after the file is written, since it uses the file to save the keys, eventhough they are alreadt saved
-        self.logger.info(f"Successfully initialized node with NRI data at {file_path}")
+        self.logger.info(f"Successfully initialized node with NRI data")
 
     def initialize_relay(self):
         pass

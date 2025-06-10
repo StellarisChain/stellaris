@@ -168,8 +168,8 @@ class KeyManager:
             
             # Fetch and update RI data
             try:
-                ri_result = fetch_ri(f"{file_name}", path="local")
-                if not ri_result or not ri_result.get("data"):
+                ri_result = fetch_ri(f"{file_name}", path="local").get("file_info")
+                if not ri_result:
                     self.logger.warning(f"No existing RI data found for {file_name}, creating new")
                     ri_data = {}
                 else:
