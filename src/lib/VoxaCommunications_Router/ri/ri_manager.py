@@ -71,7 +71,7 @@ class RIManager:
     def initialize_node(self):
         self.registry_manager.client.register_node(
             callsign=f"{self.settings.get('node-network-level', 'mainnet')}-{str(uuid.uuid4())}",
-            node_type="node"  # idk why this even exists as we know this is a node
+            node_type=self.settings.get('node-network-level', 'mainnet')  # idk why this even exists as we know this is a node
         )
         node_id = self.registry_manager.client.ids.get("node_id")
         key_manager = KeyManager(mode="node")
@@ -81,7 +81,7 @@ class RIManager:
             node_id=node_id,
             node_ip=self.registry_manager.client.node_ip,
             node_port=self.p2p_settings.get("port", 9000),  # 9000 should be standard for nodes
-            node_type="node",
+            node_type=self.settings.get('node-network-level', 'mainnet'),
             capabilities=["routing", "forwarding"],
             metadata={"location": "datacenter-1"},
             public_key=rsa_keys["public_key"],

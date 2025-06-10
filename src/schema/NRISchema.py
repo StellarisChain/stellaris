@@ -9,7 +9,7 @@ class NRISchema(BaseModel):
     node_id: str
     node_ip: str
     node_port: int
-    node_type: str = "standard"
+    node_type: str = "mainnet"
     capabilities: List[str] = []
     # routing_table: Dict[str, Any] = {}
     metadata: Optional[Dict[str, Any]] = {}
