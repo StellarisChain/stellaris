@@ -1,4 +1,5 @@
 import requests
+import uuid
 from typing import Optional
 
 class RegistryClient:
@@ -84,4 +85,24 @@ class RegistryClient:
                 return True
             else:
                 print(f"Login failed: {request.text}")
+                return False
+            
+    def register(self, name: Optional[str] = None) -> None | bool:
+        if self.credentials != {} or None:
+            if not name:
+                name = f"voxa-{self.client_type}-{str(uuid.uuid4())}"
+            request = requests.post(
+                f"{self.base_url}register",
+                json = {
+                    "email": self.credentials["email"],
+                    "password": self.credentials["password"],
+                    "name": name # technically required, but it dosent do anything at the moment
+                },
+            )
+            if request.status_code == 201:
+                response: dict = request.json()
+                self.ids["user_id"] = response.get("user_id", "")
+                return True
+            else:
+                print(f"Registration failed: {request.text}")
                 return False
