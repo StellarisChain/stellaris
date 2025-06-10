@@ -16,7 +16,7 @@ def fetch_ri(file_name, path: Optional[str] = "local") -> dict:
     """
     
     logger = log()
-    logger.info(f"Loading local NRI data")
+    logger.debug(f"Loading local NRI data")
     
     # Get storage configuration
     storage_config: dict = read_json_from_namespace("config.storage")
@@ -53,7 +53,7 @@ def fetch_ri(file_name, path: Optional[str] = "local") -> dict:
     file_size = os.path.getsize(file_path)
     original_size = len(json_data.encode('utf-8'))
     
-    logger.info(f"Successfully fetched local RI")
+    logger.debug(f"Successfully fetched local RI")
     
     return {
         "success": True,

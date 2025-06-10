@@ -27,7 +27,7 @@ def encrypt_routing_chain(request: Request = None) -> dict:
 
     logger.debug(f"Total children in routing map: {total_children}")
     for n in range(total_children):
-        i = total_children - n  # Reverse order
+        i = total_children - n - 1  # Reverse order
         child_route = routing_map.get_nth_child_route(i)
         logger.debug(f"Processing child route {i}: {child_route["relay_ip"]}")
 

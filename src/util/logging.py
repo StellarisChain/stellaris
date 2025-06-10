@@ -4,6 +4,10 @@ import os
 from typing import Optional
 from colorama import init, Fore, Style, Back
 from util.printcolor import print_color
+from util.jsonreader import read_json_from_namespace
+
+dev_config = read_json_from_namespace("config.dev") or {}
+debugging = dev_config.get("debug", False)
 
 def set_log_config(log_id: str, force: Optional[bool] = True) -> None:
     os.makedirs("logs", exist_ok=True)
@@ -27,7 +31,8 @@ class log:
 
     def debug(self, message: str) -> None:
         self.Logger.debug(f"{message}")
-        print_color(f"[DEBUG]: {message}", Fore.CYAN)
+        if debugging:
+            print_color(f"[DEBUG]: {message}", Fore.CYAN)
 
     def warning(self, message: str) -> None:
         self.Logger.warning(f"{message}")

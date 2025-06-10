@@ -1,5 +1,6 @@
 {
     "uvicorn-config": {
         "auto-reload": false
-    }
+    },
+    "debug": true
 }
