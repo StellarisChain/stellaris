@@ -22,9 +22,22 @@ echo "Reading configuration from config/p2p.json..."
 HOST=$(python -c "import json; config = json.load(open('config/p2p.json')); print(config['host'])")
 PORT=$(python -c "import json; config = json.load(open('config/p2p.json')); print(config['port'])")
 
+# Read auto-reload setting from config/dev.json
+echo "Reading auto-reload configuration from config/dev.json..."
+AUTO_RELOAD=$(python -c "import json; config = json.load(open('config/dev.json')); print(config['uvicorn-config']['auto-reload'])")
+
+# Build uvicorn command with conditional --reload flag
+UVICORN_CMD="uvicorn src.main:app --host $HOST --port $PORT"
+if [ "$AUTO_RELOAD" = "True" ]; then
+    UVICORN_CMD="$UVICORN_CMD --reload"
+    echo "Auto-reload enabled"
+else
+    echo "Auto-reload disabled"
+fi
+
 # Run the application with uvicorn from the project root
 echo "Starting FastAPI application with uvicorn on ${HOST}:${PORT}..."
-uvicorn src.main:app --host $HOST --port $PORT --reload
+$UVICORN_CMD
 
 # Deactivate the virtual environment when the server stops
 deactivate

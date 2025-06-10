@@ -1,0 +1,5 @@
+{
+    "uvicorn-config": {
+        "auto-reload": false
+    }
+}
