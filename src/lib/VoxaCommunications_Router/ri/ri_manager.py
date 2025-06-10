@@ -6,6 +6,7 @@ from datetime import datetime
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from lib.VoxaCommunications_Router.registry.client import RegistryClient
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
+from lib.VoxaCommunications_Router.cryptography.keymanager import KeyManager
 from lib.compression import JSONCompressor
 from stores.registrycontroller import get_global_registry_manager, set_global_registry_manager
 from schema.RRISchema import RRISchema
@@ -72,9 +73,9 @@ class RIManager:
             node_type="node"  # idk why this even exists as we know this is a node
         )
         node_id = self.registry_manager.client.ids.get("node_id")
-        rsa_generator = RSAKeyGenerator()
-        rsa_generator.generate_keys()
-        rsa_keys = rsa_generator.get_keys()
+        key_manager = KeyManager(mode="node")
+        rsa_keys = key_manager.generate_rsa_keys()
+        rsa_key_generator: RSAKeyGenerator = key_manager.rsa_key_generator
         nri_data: dict = NRISchema(
             node_id=node_id,
             node_ip=self.registry_manager.client.node_ip,
@@ -83,7 +84,7 @@ class RIManager:
             capabilities=["routing", "forwarding"],
             metadata={"location": "datacenter-1"},
             public_key=rsa_keys["public_key"],
-            public_key_hash=rsa_keys["public_key_hash"]
+            public_key_hash=str(rsa_key_generator.public_key_hash)
         ).dict()
         nri_data["created_at"] = datetime.utcnow().isoformat()
         nri_data["last_updated"] = datetime.utcnow().isoformat()
@@ -94,6 +95,7 @@ class RIManager:
         file_path = os.path.join(self.local_dir, "nri.bin")
         with open(file_path, 'wb') as f:
             f.write(compressed_data)
+        key_manager.save_rsa_keys() # Have to do this after the file is written, since it uses the file to save the keys, eventhough they are alreadt saved
         self.logger.info(f"Successfully initialized node with NRI data at {file_path}")
 
     def initialize_relay(self):

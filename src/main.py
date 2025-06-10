@@ -158,6 +158,7 @@ class Main:
             set_global_registry_manager(self.registry_manager)
             
             self.ri_manager: RIManager = RIManager(type="node")
+            self.ri_manager.check_initialization()
             self.ri_manager.login()
 
             if not self.ri_manager.initialized:
