@@ -7,6 +7,8 @@ import os
 from lib.VoxaCommunications_Router.util.ri_utils import save_ri
 from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
+from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
+from lib.VoxaCommunications_Router.routing.request import Request
 from schema.RRISchema import RRISchema
 
 def generate_random_ip() -> str:
@@ -31,7 +33,10 @@ def generate_test_rri_data(count: int = 10) -> None:
         save_ri(str(uuid.uuid4()), rri_data, "rri")
 
 def generate_test_rri_map():
-    print(generate_relay_map())
+    relay_map: RoutingMap = generate_relay_map()
+    request: Request = Request(routing_map=relay_map, target="example.com")
+    routing_chain = request.generate_routing_chain()
+    print(routing_chain)
 
 if __name__ == "__main__":
     # CLI interface with subparsers for different data generation tasks
