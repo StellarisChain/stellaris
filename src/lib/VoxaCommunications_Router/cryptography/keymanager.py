@@ -168,7 +168,7 @@ class KeyManager:
             
             # Fetch and update RI data
             try:
-                ri_result = fetch_ri(f"{file_name}.bin", path="local")
+                ri_result = fetch_ri(f"{file_name}", path="local")
                 if not ri_result or not ri_result.get("data"):
                     self.logger.warning(f"No existing RI data found for {file_name}, creating new")
                     ri_data = {}
@@ -181,7 +181,7 @@ class KeyManager:
             # Update and save RI data
             try:
                 ri_data["public_key"] = self.rsa_keys.get("public_key")
-                save_ri(f"{file_name}.bin", ri_data, path="local")
+                save_ri(f"{file_name}", ri_data, path="local")
             except Exception as e:
                 self.logger.error(f"Failed to save RI data: {str(e)}")
                 return {}

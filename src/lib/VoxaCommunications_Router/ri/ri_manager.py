@@ -93,6 +93,7 @@ class RIManager:
         compressor = JSONCompressor()
         compressed_data = compressor.compress(json_data)
         file_path = os.path.join(self.local_dir, "nri.bin")
+        self.logger.warning(f"Initializing node with NRI data at {file_path}")
         with open(file_path, 'wb') as f:
             f.write(compressed_data)
         key_manager.save_rsa_keys() # Have to do this after the file is written, since it uses the file to save the keys, eventhough they are alreadt saved

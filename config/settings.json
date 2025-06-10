@@ -1,5 +1,5 @@
 {
-    "node-network-level": "mainnet",
+    "node-network-level": "testnet",
     "node-autoupdate-config": true,
     "features": {
         "enable-transaction-fee": true,
