@@ -201,6 +201,7 @@ def load_all_ri(path: Optional[str] = "local") -> dict:
     
     return nri_data
 
+# Todo: create a method similar to `ri_list`, however it verifies the health of the Relays/Nodes
 def ri_list(path: Optional[str] = "local", duplicates: Optional[bool] = False):
     ri_dict: dict = load_all_ri(path)
     ri_list = []
