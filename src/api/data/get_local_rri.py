@@ -10,7 +10,7 @@ from util.jsonreader import read_json_from_namespace
 from util.logging import log
 from schema.RRISchema import RRISchema
 
-def handler(self):
+def handler():
     """
     Handle fetching Relay Routing Information (RRI).
         
