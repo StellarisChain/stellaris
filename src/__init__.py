@@ -4,3 +4,4 @@ from .lib import *
 from .util import *
 from .api import *
 from .stores import *
+from .module_tests import *
