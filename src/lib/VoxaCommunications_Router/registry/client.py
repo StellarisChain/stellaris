@@ -41,7 +41,7 @@ class RegistryClient:
         if code is not None:
             self.credentials["code"] = code
     
-    def register_node(self, callsign: str, node_ip: Optional[str] = None, node_type: str = "node"):
+    def register_node(self, callsign: str, node_ip: Optional[str] = None, node_type: str = "testnet"):
         request_json = {
             "name": callsign,
             "type": node_type
