@@ -1,0 +1,60 @@
+# Generates some testing data
+import uuid
+import random
+import argparse
+import sys
+import os
+from lib.VoxaCommunications_Router.util.ri_utils import save_ri
+from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
+from schema.RRISchema import RRISchema
+
+def generate_random_ip() -> str:
+    """Generate a random IP address."""
+    return f"{random.randint(1, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}"
+
+# Clear your RRI after doing this, if you are using a production environment
+def generate_test_rri_data(count: int = 10) -> None:
+    for _ in range(count):
+        rri_data = RRISchema(
+            relay_id=str(uuid.uuid4()),
+            relay_ip=generate_random_ip(),
+            relay_port=random.randint(8000, 9000),
+            relay_type="standard",
+            capabilities=["routing", "forwarding"],
+            metadata={"location": "datacenter-1"},
+            public_key=f"none",
+            public_key_hash=f"none"
+        ).dict()
+        save_ri(str(uuid.uuid4()), rri_data, "rri")
+
+def generate_test_rri_map():
+    print(generate_relay_map())
+
+if __name__ == "__main__":
+    # CLI interface with subparsers for different data generation tasks
+    parser = argparse.ArgumentParser(description="Generate test data for VoxaCommunications.")
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # RRI subparser
+    rri_parser = subparsers.add_parser('rri', help='RRI-related test data generation')
+    rri_subparsers = rri_parser.add_subparsers(dest='rri_command', help='RRI commands')
+    
+    # RRI data generation subcommand
+    rri_data_parser = rri_subparsers.add_parser('generate', help='Generate test RRI data entries')
+    rri_data_parser.add_argument("--count", type=int, default=10, help="Number of RRI entries to generate.")
+    
+    # RRI map generation subcommand
+    rri_map_parser = rri_subparsers.add_parser('map', help='Generate and display RRI relay map')
+    
+    args = parser.parse_args()
+    
+    if args.command == 'rri':
+        if args.rri_command == 'generate':
+            generate_test_rri_data(args.count)
+            print(f"Generated {args.count} test RRI entries.")
+        elif args.rri_command == 'map':
+            generate_test_rri_map()
+        else:
+            rri_parser.print_help()
+    else:
+        parser.print_help()

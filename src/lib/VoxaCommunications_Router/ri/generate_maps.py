@@ -18,8 +18,8 @@ def generate_relay_map() -> RoutingMap:
     temp_routing_map: list[Route] = []
     for rri in rri_list:
         route = Route(
-            *rri,
             child_route=None,  # No child route for relay routes
+            **rri,  # Unpack the RRI data into the Route
         )
         temp_routing_map.append(route)
 

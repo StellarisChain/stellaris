@@ -10,7 +10,7 @@ from typing import List, Dict, Optional, Any, Set
 from datetime import datetime, timedelta
 import json
 from .network_scanner import NetworkScanner
-from src.util.logging import log
+from util.logging import log
 
 
 class RelayDiscovery:
