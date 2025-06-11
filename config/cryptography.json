@@ -1,3 +1,4 @@
 {
-    "private-key-file": "private.key"
+    "private-key-file": "private.key",
+    "fernet-key-file": "fernet.key"
 }

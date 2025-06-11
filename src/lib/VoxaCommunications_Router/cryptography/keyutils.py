@@ -144,3 +144,19 @@ class HybridKeyGenerator:
             "rsa": rsa_keys,
             "fernet": fernet_keys
         }
+    
+    def get_keys(self) -> dict:
+        """
+        Retrieve the generated hybrid keys.
+
+        Returns:
+            dict: A dictionary containing both RSA and Fernet keys and their hashes.
+        """
+        
+        return {
+            "rsa": {
+                "public_key": self.rsa_public_key,
+                "private_key": self.rsa_private_key,
+            },
+            "fernet": self.fernet_key
+        }
