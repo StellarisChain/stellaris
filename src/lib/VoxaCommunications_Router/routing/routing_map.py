@@ -35,6 +35,7 @@ class RoutingMap(BaseModel):
     def get_total_children(self) -> int:
         """
         Get the total number of child routes by traversing the nested "child_route" structure.
+        **Count starts at 0**
         
         Returns:
             int: The total number of child routes in the routing chain

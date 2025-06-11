@@ -15,7 +15,8 @@ class Request:
             route: The route to be processed, can be a Route object or a dictionary.
         """
         self.routing_map: RoutingMap = routing_map  # The routing map containing the route information
-        self.data: dict = {} # May have to be changed in the future
+        self.request_protocol: str = "tcp" # https, "udp", "http", etc. Default is TCP
+        self.data: bytes = "placeholder".encode("utf-8") # using a placeholder right now
         self.target: str = target # Where the request is being sent, ex "example.com" or an IP address
         self.routing_chain: dict = {}
 
