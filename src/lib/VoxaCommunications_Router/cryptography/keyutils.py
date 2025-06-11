@@ -72,3 +72,75 @@ class RSAKeyGenerator:
         if private_key_hash and private_key_hash != self.private_key_hash:
             return False
         return True
+    
+class FernetKeyGenerator:
+    def __init__(self):
+        self.fernet_key: str = None
+        self.fernet_key_hash: str = None
+        self.key_id: str = None
+
+    def generate_key(self) -> dict:
+        """
+        Generate a new Fernet key and compute its SHA-256 hash.
+
+        Returns:
+            dict: A dictionary containing the Fernet key, its hash, and a unique ID.
+        """
+        fernet_key = Fernet.generate_key()
+        fernet = Fernet(fernet_key)
+        
+        self.fernet_key = base64.urlsafe_b64encode(fernet_key).decode('utf-8')
+        self.fernet_key_hash = hashlib.sha256(fernet_key).hexdigest()
+        
+        self.key_id = str(uuid.uuid4())
+        return {
+            "id": self.key_id,
+            "fernet_key": self.fernet_key,
+            "fernet_instance": fernet,
+            "fernet_key_hash": self.fernet_key_hash
+        }
+    
+    def get_key(self) -> dict:
+        """
+        Retrieve the generated Fernet key and its hash.
+
+        Returns:
+            dict: A dictionary containing the Fernet key, its hash, and a unique ID.
+        """
+        if not all([self.fernet_key, self.fernet_key_hash, self.key_id]):
+            raise ValueError("Fernet key has not been generated yet. Call generate_key() first.")
+        
+        return {
+            "id": self.key_id,
+            "fernet_key": self.fernet_key,
+            "fernet_instance": Fernet(self.fernet_key),
+            "fernet_key_hash": self.fernet_key_hash
+        }
+    
+class HybridKeyGenerator:
+    def __init__(self):
+        self.rsa_generator = RSAKeyGenerator()
+        self.fernet_generator = FernetKeyGenerator()
+        self.fernet_key: str = None
+        self.rsa_public_key: str = None
+        self.rsa_private_key: str = None
+
+    def generate_hybrid_keys(self) -> dict:
+        """
+        Generate a hybrid key pair combining RSA and Fernet keys.
+
+        Returns:
+            dict: A dictionary containing both RSA and Fernet keys and their hashes.
+        """
+        rsa_keys = self.rsa_generator.generate_keys()
+        fernet_keys = self.fernet_generator.generate_key()
+        self.fernet_key = self.fernet_generator.fernet_key
+        self.rsa_public_key = rsa_keys["public_key"]
+        self.rsa_private_key = rsa_keys["private_key"]
+        if not all([self.fernet_key, self.rsa_public_key, self.rsa_private_key]):
+            raise ValueError("Hybrid keys have not been generated properly.")
+        
+        return {
+            "rsa": rsa_keys,
+            "fernet": fernet_keys
+        }

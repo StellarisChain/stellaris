@@ -8,7 +8,7 @@ import os
 import traceback
 from typing import Optional
 from cryptography.fernet import Fernet
-from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
+from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator, FernetKeyGenerator, HybridKeyGenerator
 from lib.VoxaCommunications_Router.util.ri_utils import fetch_ri, save_ri
 from lib.compression import JSONCompressor
 from util.jsonreader import read_json_from_namespace
@@ -21,8 +21,10 @@ class KeyManager:
         self.mode = mode
         self.logger = log()
         self.rsa_keys: dict = {}
+        self.fernet_key: str = None
         self.cryptography_config = read_json_from_namespace("config.cryptography") or {}
         self.rsa_key_generator: RSAKeyGenerator = None
+        self.hybrid_key_generator: HybridKeyGenerator = None
         self._keys_exist: bool = False
 
     @property
