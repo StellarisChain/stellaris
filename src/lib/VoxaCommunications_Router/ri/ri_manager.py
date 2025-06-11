@@ -75,8 +75,8 @@ class RIManager:
         )
         node_id = self.registry_manager.client.ids.get("node_id")
         key_manager = KeyManager(mode="node")
-        rsa_keys = key_manager.generate_rsa_keys()
-        rsa_key_generator: RSAKeyGenerator = key_manager.rsa_key_generator
+        rsa_keys = key_manager.generate_hybrid_keys().get("rsa")
+        rsa_key_generator: RSAKeyGenerator = key_manager.hybrid_key_generator.rsa_generator
         nri_data: dict = NRISchema(
             node_id=node_id,
             node_ip=self.registry_manager.client.node_ip,
@@ -92,7 +92,7 @@ class RIManager:
         nri_data["version"] = str(__version__)
         json_data = json.dumps(nri_data, indent=2, ensure_ascii=False)
         save_ri("nri", json_data, path="local")
-        key_manager.save_rsa_keys() # Have to do this after the file is written, since it uses the file to save the keys, eventhough they are alreadt saved
+        key_manager.save_hybrid_keys() # Have to do this after the file is written, since it uses the file to save the keys, eventhough they are alreadt saved
         self.logger.info(f"Successfully initialized node with NRI data")
 
     def initialize_relay(self):

@@ -152,6 +152,11 @@ class KeyManager:
                 return {}
             self.fernet_key = generated_keys.get("fernet")
 
+            return {
+                "rsa": self.rsa_keys,
+                "fernet": self.fernet_key
+            }
+
         except Exception as e:
             self.logger.error(f"Failed to generate hybrid keys: {str(e)}")
             self._keys_exist = False
