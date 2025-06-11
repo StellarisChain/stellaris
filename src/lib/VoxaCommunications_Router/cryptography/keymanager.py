@@ -13,8 +13,9 @@ from lib.VoxaCommunications_Router.util.ri_utils import fetch_ri, save_ri
 from lib.compression import JSONCompressor
 from util.jsonreader import read_json_from_namespace
 from util.jsonutils import json_from_keys
-from util.filereader import file_to_str
+from util.filereader import file_to_str, save_key_file
 from util.logging import log
+from util.wrappers import deprecated
 
 #TODO: Move towards a hybrid key system
 class KeyManager:
@@ -258,10 +259,12 @@ class KeyManager:
             private_key_path = os.path.join(local_dir, private_key_file)
             fernet_key_path = os.path.join(local_dir, fernet_key_file)
             try:
-                with open(private_key_path, 'w') as f:
-                    f.write(self.rsa_keys.get("private_key"))
-                with open(fernet_key_path, 'w') as f:
-                    f.write(self.fernet_key)
+                save_key_file(private_key_file, self.rsa_keys.get("private_key"))
+                save_key_file(fernet_key_file, self.fernet_key)
+                #with open(private_key_path, 'w') as f:
+                #    f.write(self.rsa_keys.get("private_key"))
+                #with open(fernet_key_path, 'w') as f:
+                #    f.write(self.fernet_key)
                 #os.chmod(private_key_path, 0o600)  # Set secure permissions
             except Exception as e:
                 self.logger.error(f"Failed to save private key file: {str(e)}")
@@ -275,6 +278,8 @@ class KeyManager:
             traceback.print_exception(type(e), e, e.__traceback__)
             return {}
 
+    # Depricated method, use save_hybrid_keys instead
+    @deprecated("Use save_hybrid_keys instead")
     def save_rsa_keys(self) -> dict:
         """Save RSA keys to storage with comprehensive error handling."""
         try:
