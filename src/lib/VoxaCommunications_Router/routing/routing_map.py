@@ -24,16 +24,21 @@ class RoutingMap(BaseModel):
             return None
         
         current_route = self.routes
-        for i in range(n + 1):
+        for i in range(n):  # Fixed: changed from range(n + 1) to range(n)
             if "child_route" not in current_route:
                 return None
             child_route = current_route["child_route"]
-            if not current_route:
+            if not child_route:  # Fixed: check child_route instead of current_route
                 return None
             else:
                 current_route = child_route
+        
+        # For n=0, we want the first child route
+        if "child_route" not in current_route:
+            return None
+        
         # Return a deep copy to avoid circular references
-        route_copy = deepcopy(current_route)
+        route_copy = deepcopy(current_route["child_route"])
         return route_copy
     
     def get_total_children(self) -> int:

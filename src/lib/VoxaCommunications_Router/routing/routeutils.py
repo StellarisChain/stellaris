@@ -36,6 +36,7 @@ def encrypt_routing_chain(request: Request = None) -> dict:
         logger.error("No child routes found in the routing map.")
         return None
     
+    # Create new routing map for encrypted routes
     new_routing_map: RoutingMap = deepcopy(routing_map)
     new_routing_map.routes = serialize_dict_for_json(new_routing_map.routes)
 
@@ -44,7 +45,11 @@ def encrypt_routing_chain(request: Request = None) -> dict:
     for n in range(total_children):
         i = last_child_index - n # Reverse order
         child_route: dict | bytes = new_routing_map.get_nth_child_route(i)
-        next_route: dict | bytes = new_routing_map.get_nth_child_route(i - 1) # Will be None if its the first child route      
+        
+        # When going backwards, i - 1 is the next route in the chain
+        next_route: dict | bytes = None
+        if i - 1 >= 0:
+            next_route = new_routing_map.get_nth_child_route(i - 1)
 
         logger.debug(f"Processing child route: {i}")
         do_encrypt: bool = True
@@ -63,12 +68,16 @@ def encrypt_routing_chain(request: Request = None) -> dict:
                 logger.debug(f"Child route id: {child_route.get("relay_id", "N/A")}")
 
         if do_encrypt:
-            # logger.debug(child_route)
-            encrypted_child_route, encrypted_message_hash, encrypted_fernet = encrypt_route_message(
-                message = child_route,
-                public_key = next_route['public_key'] # Encrypt from the next route's public key, which would appear before this on the route map
-            )
-            child_route = serialize_for_json(encrypted_child_route)
+            # Ensure next_route is a dict before accessing public_key
+            if isinstance(next_route, dict) and 'public_key' in next_route:
+                encrypted_child_route, encrypted_message_hash, encrypted_fernet = encrypt_route_message(
+                    message = child_route,
+                    public_key = next_route['public_key'] # Encrypt from the next route's public key, which would appear before this on the route map
+                )
+                child_route = serialize_for_json(encrypted_child_route)
+            else:
+                logger.error(f"Next route is not a valid dict or missing public_key for route {i}")
+                do_encrypt = False
         
         new_routing_map.set_nth_child_route(i, child_route)
 
