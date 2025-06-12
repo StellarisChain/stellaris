@@ -11,6 +11,11 @@ from util.jsonutils import serialize_for_json, serialize_dict_for_json
 Developer Note:
 Take a deep breath, this is a complex and anoying function to write.
 This function is responsible for encrypting the routing chain of a request.
+
+Some thoughts:
+When sending, each node/relay only forwards the part that it decrypts, to precent the sender's ip from being exposed.
+Then each node/relay sends the data back to the previous node/relay, which then forwards it to the next one.
+You can also only decrypt it one block at a time.
 """
 
 logger = log()
