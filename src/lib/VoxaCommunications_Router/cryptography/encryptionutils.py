@@ -4,11 +4,29 @@ import json
 import base64
 import hashlib
 from util.filereader import read_key_file
+from util.logging import log
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from util.jsonutils import serialize_for_json
 
-def encrypt_message(message: str, public_key: str) -> tuple[bytes, bytes]:
+# TODO: Fernet should be generated each time, not read from file
+
+logger = log()
+
+def encrypt_fernet(public_key: str) -> bytes:
+    """
+    Encrypt the Fernet key using RSA public key.
+    Args:
+        public_key (str): The RSA public key in PEM format.
+    Returns:
+        bytes: The encrypted Fernet key as bytes."""
+    rsa_public = rsa.PublicKey.load_pkcs1(public_key.encode('utf-8'))
+    fernet_key_str = read_key_file("fernet")
+    fernet_encrypted = rsa.encrypt(fernet_key_str.encode('utf-8'), rsa_public)
+    return fernet_encrypted
+
+def encrypt_message(message: str, public_key: str) -> bytes:
     """
     Encrypt a message using hybrid encryption (AES + RSA).
     For large messages, uses AES for the message and RSA for the AES key.
@@ -22,17 +40,33 @@ def encrypt_message(message: str, public_key: str) -> tuple[bytes, bytes]:
     """
     message_bytes = message.encode('utf-8')
     
-    # For small messages that fit in RSA, use direct RSA encryption
-    rsa_public = rsa.PublicKey.load_pkcs1(public_key.encode('utf-8'))
     fernet_key_str = read_key_file("fernet")
     
     # The key from file should be a base64-encoded string that we can use directly
     fernet = Fernet(fernet_key_str.encode('utf-8'))
 
-    fernet_encrypted = rsa.encrypt(fernet_key_str.encode('utf-8'), rsa_public)
     message_encrypted = fernet.encrypt(message_bytes)
     
-    return message_encrypted, fernet_encrypted
+    return message_encrypted
+
+def encrypt_route_message(message: dict, public_key: str) -> tuple[bytes, str, bytes]:
+    """
+    Encrypt a message using the provided RSA public key and return the encrypted message along with its hash.
+
+    Args:
+        message (str): The message to encrypt.
+        public_key (str): The RSA public key in PEM format.
+
+    Returns:
+        tuple: A tuple containing the encrypted message as bytes and the orginal message's SHA-256 hash as a hex string.
+    """
+    encrypted_fernet: bytes = encrypt_fernet(public_key)
+    message["encrypted_fernet"] = encrypted_fernet
+    message: dict = serialize_for_json(message)
+    json_str_message: str = json.dumps(message, indent=2)
+    encrypted_message: bytes = encrypt_message(json_str_message, public_key)
+    message_hash = hashlib.sha256(json_str_message.encode('utf-8')).hexdigest()  # Original messages hash, used to verify integrity
+    return encrypted_message, message_hash, encrypted_fernet    
 
 def encrypt_message_return_hash(message: str, public_key: str) -> tuple[bytes, str, bytes]:
     """
@@ -45,7 +79,8 @@ def encrypt_message_return_hash(message: str, public_key: str) -> tuple[bytes, s
     Returns:
         tuple: A tuple containing the encrypted message as bytes and the orginal message's SHA-256 hash as a hex string.
     """
-    encrypted_message, encrypted_fernet = encrypt_message(message, public_key)
+    encrypted_message = encrypt_message(message, public_key)
+    encrypted_fernet = encrypt_fernet(public_key)
     message_hash = hashlib.sha256(message.encode('utf-8')).hexdigest() # Original messages hash, used to verify integrity
     return encrypted_message, message_hash, encrypted_fernet
 
