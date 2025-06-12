@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, Any
+from copy import deepcopy
 from util.logging import log
 
 class RoutingMap(BaseModel):
@@ -26,11 +27,14 @@ class RoutingMap(BaseModel):
         for i in range(n + 1):
             if "child_route" not in current_route:
                 return None
-            current_route = current_route["child_route"]
+            child_route = current_route["child_route"]
             if not current_route:
                 return None
-                
-        return current_route
+            else:
+                current_route = child_route
+        # Return a deep copy to avoid circular references
+        route_copy = deepcopy(current_route)
+        return route_copy
     
     def get_total_children(self) -> int:
         """

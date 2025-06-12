@@ -40,9 +40,9 @@ def encrypt_routing_chain(request: Request = None) -> dict:
     new_routing_map.routes = serialize_dict_for_json(new_routing_map.routes)
 
     logger.info(f"Total children in routing map: {total_children}")
-    last_child_index = total_children - 1
+    last_child_index = total_children - 1 # Start from zero index
     for n in range(total_children):
-        i = last_child_index - n  # Reverse order
+        i = last_child_index - n # Reverse order
         child_route: dict | bytes = new_routing_map.get_nth_child_route(i)
         next_route: dict | bytes = new_routing_map.get_nth_child_route(i - 1) # Will be None if its the first child route      
 
@@ -59,6 +59,8 @@ def encrypt_routing_chain(request: Request = None) -> dict:
         if not next_route:
             do_encrypt = False
             logger.debug(f"No next route found for child route {i}, skipping encryption.")
+            if isinstance(child_route, dict):
+                logger.debug(f"Child route id: {child_route.get("relay_id", "N/A")}")
 
         if do_encrypt:
             # logger.debug(child_route)
