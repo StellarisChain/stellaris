@@ -154,19 +154,20 @@ def save_ri(file_name: str, data: Dict[Any, Any], path: Optional[str] = "local")
             "error": f"Save operation failed: {e}"
         }
     
-def load_all_ri(path: Optional[str] = "local") -> dict:
+def load_all_ri(path: Optional[str] = "local", limit: Optional[int] = None) -> dict:
     """
     Load all Node Routing Information (NRI) files from the specified path.
     
     Args:
         path (str, optional): Storage path subdirectory. Defaults to "local".
+        limit (int, optional): Maximum number of files to load. Defaults to None (load all).
         
     Returns:
         dict: A dictionary containing all loaded NRI data.
     """
     
     logger = log()
-    logger.info(f"Loading all local NRI data from {path}")
+    logger.info(f"Loading local NRI data from {path}" + (f" (limit: {limit})" if limit else ""))
     
     # Get storage configuration
     storage_config: dict = read_json_from_namespace("config.storage")
@@ -187,6 +188,7 @@ def load_all_ri(path: Optional[str] = "local") -> dict:
     nri_data = {}
     
     # Iterate through all files in the NRI directory
+    files_processed = 0
     for file_name in os.listdir(nri_dir):
         if file_name.endswith(".bin"):
             file_path = os.path.join(nri_dir, file_name)
@@ -194,6 +196,10 @@ def load_all_ri(path: Optional[str] = "local") -> dict:
                 result = fetch_ri(file_name[:-4], path=path)  # Remove .bin extension
                 if result and result.get("success"):
                     nri_data[file_name[:-4]] = result["file_info"]["data"]
+                    files_processed += 1
+                    if limit and files_processed >= limit:
+                        logger.info(f"Reached load limit of {limit} files")
+                        break
             except Exception as e:
                 logger.error(f"Failed to load {file_name}: {e}")
     
@@ -202,8 +208,8 @@ def load_all_ri(path: Optional[str] = "local") -> dict:
     return nri_data
 
 # Todo: create a method similar to `ri_list`, however it verifies the health of the Relays/Nodes
-def ri_list(path: Optional[str] = "local", duplicates: Optional[bool] = False):
-    ri_dict: dict = load_all_ri(path)
+def ri_list(path: Optional[str] = "local", duplicates: Optional[bool] = False, limit: Optional[int] = None) -> Optional[list]:
+    ri_dict: dict = load_all_ri(path,limit=limit)
     ri_list = []
     if not ri_dict:
         return None
