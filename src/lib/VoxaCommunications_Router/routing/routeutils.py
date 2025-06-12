@@ -50,13 +50,15 @@ def encrypt_routing_chain(request: Request = None) -> dict:
         do_encrypt: bool = True
 
         # If it's the first (last_child_index = 1) or last (i = 0) we don't encrypt
-        # TODO: encrypt the last one as well
-        if last_child_index == i or not next_route:
-            do_encrypt = False
-        
+        # TODO: encrypt the last one as well        
         if last_child_index == i:
+            do_encrypt = False
             child_route["route_data"] = serialize_for_json(request.data)
             new_routing_map.set_nth_child_route(i, child_route)
+
+        if not next_route:
+            do_encrypt = False
+            logger.debug(f"No next route found for child route {i}, skipping encryption.")
 
         if do_encrypt:
             # logger.debug(child_route)

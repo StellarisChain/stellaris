@@ -4,6 +4,7 @@ import random
 import argparse
 import sys
 import os
+import io
 from lib.VoxaCommunications_Router.util.ri_utils import save_ri
 from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
@@ -36,9 +37,12 @@ def generate_test_rri_map():
     relay_map: RoutingMap = generate_relay_map(max_map_size=20)
     request: Request = Request(routing_map=relay_map, target="example.com")
     routing_chain = request.generate_routing_chain()
-    print(routing_chain)
-
+    file_name = os.path.join("testoutput", f"test_rri_map_{str(uuid.uuid4())}.json")
+    with open(file_name, 'w') as f:
+        f.write(str(routing_chain))
+    print(f"Generated RRI map saved to {file_name}")
 if __name__ == "__main__":
+    os.makedirs("testoutput", exist_ok=True)  # Ensure the testoutput directory exists
     # CLI interface with subparsers for different data generation tasks
     parser = argparse.ArgumentParser(description="Generate test data for VoxaCommunications.")
     subparsers = parser.add_subparsers(dest='command', help='Available commands')

@@ -13,3 +13,5 @@ TESTING.md
 build
 dist
 todo.txt
+testoutput
+*.out
