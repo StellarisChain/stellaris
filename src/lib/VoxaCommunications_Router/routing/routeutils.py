@@ -5,7 +5,7 @@ from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.cryptography.encryptionutils import encrypt_message, encrypt_message_return_hash, encrypt_route_message
 from util.logging import log
-from util.jsonutils import serialize_for_json
+from util.jsonutils import serialize_for_json, serialize_dict_for_json
 
 """
 Developer Note:
@@ -37,29 +37,36 @@ def encrypt_routing_chain(request: Request = None) -> dict:
         return None
     
     new_routing_map: RoutingMap = deepcopy(routing_map)
+    new_routing_map.routes = serialize_dict_for_json(new_routing_map.routes)
 
     logger.info(f"Total children in routing map: {total_children}")
     last_child_index = total_children - 1
     for n in range(total_children):
         i = last_child_index - n  # Reverse order
-        child_route: dict | bytes = serialize_for_json(new_routing_map.get_nth_child_route(i))
-        next_route: dict = new_routing_map.get_nth_child_route(i - 1) # Will be None if its the first child route      
-        
+        child_route: dict | bytes = new_routing_map.get_nth_child_route(i)
+        next_route: dict | bytes = new_routing_map.get_nth_child_route(i - 1) # Will be None if its the first child route      
+
+        logger.debug(f"Processing child route: {i}")
         do_encrypt: bool = True
 
         # If it's the first (last_child_index = 1) or last (i = 0) we don't encrypt
         # TODO: encrypt the last one as well
         if last_child_index == i or not next_route:
             do_encrypt = False
+        
+        if last_child_index == i:
+            child_route["route_data"] = serialize_for_json(request.data)
+            new_routing_map.set_nth_child_route(i, child_route)
 
         if do_encrypt:
+            # logger.debug(child_route)
             encrypted_child_route, encrypted_message_hash, encrypted_fernet = encrypt_route_message(
                 message = child_route,
                 public_key = next_route['public_key'] # Encrypt from the next route's public key, which would appear before this on the route map
             )
-            child_route = encrypted_child_route
+            child_route = serialize_for_json(encrypted_child_route)
         
-        new_routing_map.set_nth_child_route(i - 1, child_route)
+        new_routing_map.set_nth_child_route(i, child_route)
 
     logger.info(f"Final routing reached")
-    return {}
+    return new_routing_map.routes

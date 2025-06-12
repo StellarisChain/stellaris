@@ -20,3 +20,7 @@ def serialize_for_json(obj):
         return base64.b64encode(obj).decode('utf-8')
     else:
         return obj
+    
+def serialize_dict_for_json(data: dict) -> dict:
+    """Serialize a dictionary for JSON serialization, handling bytes and other types."""
+    return {key: serialize_for_json(value) for key, value in data.items()} if isinstance(data, dict) else data

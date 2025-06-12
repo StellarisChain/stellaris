@@ -49,23 +49,34 @@ def encrypt_message(message: str, public_key: str) -> bytes:
     
     return message_encrypted
 
-def encrypt_route_message(message: dict, public_key: str) -> tuple[bytes, str, bytes]:
+def encrypt_route_message(message: dict | str, public_key: str) -> tuple[bytes, str, bytes]:
     """
     Encrypt a message using the provided RSA public key and return the encrypted message along with its hash.
 
     Args:
-        message (str): The message to encrypt.
+        message (dict|str): The message to encrypt. Can be either a dictionary or a string.
         public_key (str): The RSA public key in PEM format.
 
     Returns:
-        tuple: A tuple containing the encrypted message as bytes and the orginal message's SHA-256 hash as a hex string.
+        tuple: A tuple containing the encrypted message as bytes and the original message's SHA-256 hash as a hex string.
     """
+
     encrypted_fernet: bytes = encrypt_fernet(public_key)
-    message["encrypted_fernet"] = encrypted_fernet
-    message: dict = serialize_for_json(message)
-    json_str_message: str = json.dumps(message, indent=2)
+    
+    # Process the message to ensure encrypted_fernet is added in all cases
+    if isinstance(message, dict):
+        # For dictionary, make a copy and add encrypted_fernet directly
+        message_dict = message.copy()  # Make a copy to avoid modifying the original
+        message_dict["encrypted_fernet"] = serialize_for_json(encrypted_fernet)
+        json_str_message: str = json.dumps(message_dict, indent=2)
+    else:
+        # For string, convert to dict first, add encrypted_fernet, then back to string
+        message_dict = json.loads(message)
+        message_dict["encrypted_fernet"] = serialize_for_json(encrypted_fernet)
+        json_str_message: str = json.dumps(message_dict, indent=2)
+
     encrypted_message: bytes = encrypt_message(json_str_message, public_key)
-    message_hash = hashlib.sha256(json_str_message.encode('utf-8')).hexdigest()  # Original messages hash, used to verify integrity
+    message_hash = hashlib.sha256(json_str_message.encode('utf-8')).hexdigest()  # Original message's hash, used to verify integrity
     return encrypted_message, message_hash, encrypted_fernet    
 
 def encrypt_message_return_hash(message: str, public_key: str) -> tuple[bytes, str, bytes]:
