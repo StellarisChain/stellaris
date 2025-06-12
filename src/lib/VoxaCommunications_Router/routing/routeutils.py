@@ -1,5 +1,6 @@
 import json
 import base64
+from copy import deepcopy
 from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.cryptography.encryptionutils import encrypt_message, encrypt_message_return_hash, encrypt_route_message
@@ -35,14 +36,14 @@ def encrypt_routing_chain(request: Request = None) -> dict:
         logger.error("No child routes found in the routing map.")
         return None
     
-    encrypted_routing_chain: dict = {} # Diffrence between routing_chain and routing_map is that routing_chain has the data packet at the end
+    new_routing_map: RoutingMap = deepcopy(routing_map)
 
     logger.info(f"Total children in routing map: {total_children}")
     last_child_index = total_children - 1
     for n in range(total_children):
         i = last_child_index - n  # Reverse order
-        child_route: dict | bytes = serialize_for_json(routing_map.get_nth_child_route(i))
-        next_route: dict = routing_map.get_nth_child_route(i - 1) # Will be None if its the first child route      
+        child_route: dict | bytes = serialize_for_json(new_routing_map.get_nth_child_route(i))
+        next_route: dict = new_routing_map.get_nth_child_route(i - 1) # Will be None if its the first child route      
         
         do_encrypt: bool = True
 
@@ -57,6 +58,8 @@ def encrypt_routing_chain(request: Request = None) -> dict:
                 public_key = next_route['public_key'] # Encrypt from the next route's public key, which would appear before this on the route map
             )
             child_route = encrypted_child_route
+        
+        new_routing_map.set_nth_child_route(i - 1, child_route)
 
     logger.info(f"Final routing reached")
-    return encrypted_routing_chain
+    return {}

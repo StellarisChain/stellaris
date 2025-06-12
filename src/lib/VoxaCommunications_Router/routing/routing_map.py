@@ -53,3 +53,25 @@ class RoutingMap(BaseModel):
             current_route = current_route["child_route"]
             
         return count
+    
+    def set_nth_child_route(self, n: int, route: dict | bytes) -> bool:
+        """
+        Set the nth child route by traversing the nested "child-route" structure.
+        
+        Args:
+            n (int): The index of the child route to set (0-based)
+            route (dict): The route to set at the nth position
+        Returns:
+            bool: True if the route was set successfully, False otherwise
+        """
+        if not self.routes or n < 0:
+            return False
+        
+        current_route = self.routes
+        for i in range(n):
+            if "child_route" not in current_route:
+                return False
+            current_route = current_route["child_route"]
+        
+        current_route["child_route"] = route
+        return True
