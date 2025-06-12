@@ -77,12 +77,13 @@ def encrypt_routing_chain(request: Request = None) -> dict:
                 logger.debug(child_route)
                 # Serialize the child_route to handle bytes data before JSON conversion
                 serialized_child_route = serialize_for_json(child_route)
-                child_route, encrypted_message_hash = encrypt_message_return_hash(
+                child_route, encrypted_message_hash, encrypted_fernet = encrypt_message_return_hash(
                     message = json.dumps(serialized_child_route, indent=2), # convert to JSON string
                     public_key = previous_child["public_key"] # I think this is the correct public key to use
                 )
             previous_child["child_route"] = child_route
             previous_child["encrypted_message_hash"] = encrypted_message_hash
+            previous_child["encrypted_fernet"] = encrypted_fernet
         
     logger.debug(previous_child)
     return encrypted_routing_chain
