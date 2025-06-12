@@ -33,7 +33,7 @@ def generate_test_rri_data(count: int = 10) -> None:
         save_ri(str(uuid.uuid4()), rri_data, "rri")
 
 def generate_test_rri_map():
-    relay_map: RoutingMap = generate_relay_map()
+    relay_map: RoutingMap = generate_relay_map(max_map_size=20)
     request: Request = Request(routing_map=relay_map, target="example.com")
     routing_chain = request.generate_routing_chain()
     print(routing_chain)

@@ -25,6 +25,7 @@ def serialize_for_json(obj):
         return obj
 
 # TODO: Encrypt the routing data, for now it remains a utf-8 string in binary format.
+# TODO: Make this more efficent, over 20 in a request results in a lot of data to encrypt which can take hours
 def encrypt_routing_chain(request: Request = None) -> dict:
     """Encrypt the routing chain of a request.
 
@@ -74,7 +75,7 @@ def encrypt_routing_chain(request: Request = None) -> dict:
         else:
             if do_encrypt:
                 # Encrypt with the parent public key
-                logger.debug(child_route)
+                #logger.debug(child_route)
                 # Serialize the child_route to handle bytes data before JSON conversion
                 serialized_child_route = serialize_for_json(child_route)
                 child_route, encrypted_message_hash, encrypted_fernet = encrypt_message_return_hash(
@@ -85,5 +86,5 @@ def encrypt_routing_chain(request: Request = None) -> dict:
             previous_child["encrypted_message_hash"] = encrypted_message_hash
             previous_child["encrypted_fernet"] = encrypted_fernet
         
-    logger.debug(previous_child)
+    #logger.debug(previous_child)
     return encrypted_routing_chain
