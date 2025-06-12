@@ -152,7 +152,7 @@ class KeyManager:
                 self._keys_exist = False
                 return {}
             self.fernet_key = generated_keys.get("fernet")
-
+            self._keys_exist = True
             return {
                 "rsa": self.rsa_keys,
                 "fernet": self.fernet_key
@@ -245,13 +245,13 @@ class KeyManager:
                 return {}
             
             # Save private key
-            private_key_file = self.cryptography_config.get("private-key-file")
+            private_key_file: str = self.cryptography_config.get("private-key-file")
             if not private_key_file:
                 self.logger.error("Private key file not specified in cryptography config")
                 return {}
             
             # Save fernet key
-            fernet_key_file = self.cryptography_config.get("fernet-key-file")
+            fernet_key_file: str = self.cryptography_config.get("fernet-key-file")
             if not fernet_key_file:
                 self.logger.error("Fernet key file not specified in cryptography config")
                 return {}
@@ -259,8 +259,8 @@ class KeyManager:
             private_key_path = os.path.join(local_dir, private_key_file)
             fernet_key_path = os.path.join(local_dir, fernet_key_file)
             try:
-                save_key_file(private_key_file, self.rsa_keys.get("private_key"))
-                save_key_file(fernet_key_file, self.fernet_key)
+                save_key_file(private_key_file.split(".")[0], self.rsa_keys.get("private_key"))
+                save_key_file(fernet_key_file.split(".")[0], self.fernet_key)
                 #with open(private_key_path, 'w') as f:
                 #    f.write(self.rsa_keys.get("private_key"))
                 #with open(fernet_key_path, 'w') as f:
