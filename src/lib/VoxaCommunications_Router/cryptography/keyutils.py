@@ -89,7 +89,8 @@ class FernetKeyGenerator:
         fernet_key = Fernet.generate_key()
         fernet = Fernet(fernet_key)
         
-        self.fernet_key = base64.urlsafe_b64encode(fernet_key).decode('utf-8')
+        # Store the key as a base64 string (Fernet.generate_key() already returns base64-encoded bytes)
+        self.fernet_key = fernet_key.decode('utf-8')
         self.fernet_key_hash = hashlib.sha256(fernet_key).hexdigest()
         
         self.key_id = str(uuid.uuid4())
@@ -99,7 +100,7 @@ class FernetKeyGenerator:
             "fernet_instance": fernet,
             "fernet_key_hash": self.fernet_key_hash
         }
-    
+
     def get_key(self) -> dict:
         """
         Retrieve the generated Fernet key and its hash.
@@ -113,7 +114,7 @@ class FernetKeyGenerator:
         return {
             "id": self.key_id,
             "fernet_key": self.fernet_key,
-            "fernet_instance": Fernet(self.fernet_key),
+            "fernet_instance": Fernet(self.fernet_key.encode('utf-8')),
             "fernet_key_hash": self.fernet_key_hash
         }
     

@@ -2,6 +2,7 @@ import rsa
 import os
 import json
 import base64
+import hashlib
 from util.filereader import read_key_file
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
@@ -23,10 +24,12 @@ def encrypt_message(message: str, public_key: str) -> tuple[bytes, bytes]:
     
     # For small messages that fit in RSA, use direct RSA encryption
     rsa_public = rsa.PublicKey.load_pkcs1(public_key.encode('utf-8'))
-    fernet_key = read_key_file("fernet")
-    fernet = Fernet(fernet_key)
+    fernet_key_str = read_key_file("fernet")
+    
+    # The key from file should be a base64-encoded string that we can use directly
+    fernet = Fernet(fernet_key_str.encode('utf-8'))
 
-    fernet_encrypted = rsa.encrypt(fernet_key, rsa_public)
+    fernet_encrypted = rsa.encrypt(fernet_key_str.encode('utf-8'), rsa_public)
     message_encrypted = fernet.encrypt(message_bytes)
     
     return message_encrypted, fernet_encrypted
@@ -43,7 +46,7 @@ def encrypt_message_return_hash(message: str, public_key: str) -> tuple[bytes, s
         tuple: A tuple containing the encrypted message as bytes and the orginal message's SHA-256 hash as a hex string.
     """
     encrypted_message, encrypted_fernet = encrypt_message(message, public_key)
-    message_hash = rsa.compute_hash(message, 'SHA-256').hex() # Orginal messages hash, used to verify integrity
+    message_hash = hashlib.sha256(message.encode('utf-8')).hexdigest() # Original messages hash, used to verify integrity
     return encrypted_message, message_hash, encrypted_fernet
 
 def decrypt_message(encrypted_message: bytes, private_key: str, encrypted_fernet: bytes) -> str:
