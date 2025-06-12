@@ -45,11 +45,8 @@ def encrypt_routing_chain(request: Request = None) -> dict:
     for n in range(total_children):
         i = last_child_index - n # Reverse order
         child_route: dict | bytes = new_routing_map.get_nth_child_route(i)
-        
         # When going backwards, i - 1 is the next route in the chain
-        next_route: dict | bytes = None
-        if i - 1 >= 0:
-            next_route = new_routing_map.get_nth_child_route(i - 1)
+        next_route: dict | bytes = new_routing_map.get_nth_child_route(i - 1)
 
         logger.debug(f"Processing child route: {i}")
         do_encrypt: bool = True

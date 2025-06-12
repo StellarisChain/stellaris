@@ -20,7 +20,7 @@ class RoutingMap(BaseModel):
         Returns:
             Optional[Any]: The nth child route if it exists, None otherwise
         """
-        if not self.routes or n < 0:
+        if not self.routes:
             return None
         
         current_route = self.routes
@@ -32,6 +32,9 @@ class RoutingMap(BaseModel):
                 return None
             else:
                 current_route = child_route
+        
+        if n < 0:
+            return self.routes # ex. -1 which returns the root route
         
         # For n=0, we want the first child route
         if "child_route" not in current_route:
