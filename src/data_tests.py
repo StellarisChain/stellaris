@@ -44,6 +44,8 @@ def generate_test_rri_map(benchmark: bool = False) -> None:
     print(f"Generated RRI map saved to {file_name}")
     benchmark_stats = benchmark_collector.get_stats()
     if benchmark:
+        print(f"\nRouting Module Benchmarks:")
+        print("-" * 30)
         for name, stats in benchmark_stats.items():
             print(f"  {name}: {stats.total_calls} calls, "
               f"avg {stats.avg_time*1000:.2f}ms")
