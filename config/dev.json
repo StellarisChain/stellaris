@@ -3,5 +3,5 @@
         "auto-reload": false
     },
     "debug": true,
-    "retry-decrypt": false
+    "retry-decrypt": true
 }

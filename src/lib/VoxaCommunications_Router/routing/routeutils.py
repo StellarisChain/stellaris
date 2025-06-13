@@ -75,22 +75,22 @@ def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key
     else:
         encrypted_fernet_bytes = encrypted_fernet
 
-    # Try to find the correct private key if the provided one doesn't work
+    # Try to decrypt with the provided private key first
     try:
         return decrypt_routing_chain_block(block, private_key, encrypted_fernet)
     except Exception as e:
         if ("RSA decryption failed" in str(e)) and debug and retry_decrypt:
             logger.warning(f"Initial decryption failed with provided key: {str(e)}")
-            logger.info("Attempting to find correct private key...")
+            logger.info("Attempting to find correct private key using routing chain logic...")
             
-            # Import the key fixing function
-            from lib.VoxaCommunications_Router.cryptography.encryptionutils import diagnose_and_fix_key_mismatch
+            # Import the key finding function
+            from lib.VoxaCommunications_Router.cryptography.encryptionutils import find_correct_key_using_routing_logic
             
             # Try to find the correct key
-            corrected_key = diagnose_and_fix_key_mismatch(previous_block, private_key, encrypted_fernet_bytes)
+            corrected_key = find_correct_key_using_routing_logic(previous_block, encrypted_fernet_bytes)
             
-            if corrected_key != private_key:
-                logger.info("Retrying decryption with corrected key...")
+            if corrected_key and corrected_key != private_key:
+                logger.info("Found correct private key - retrying decryption...")
                 return decrypt_routing_chain_block(block, corrected_key, encrypted_fernet)
             else:
                 logger.error("Could not find correct key - decryption failed")

@@ -33,7 +33,9 @@ def generate_random_ip() -> str:
 def generate_test_rri_data(count: int = 10) -> None:
     for _ in range(count):
         key_generator = RSAKeyGenerator()
-        public_key, private_key = key_generator.generate_keys()["public_key"], key_generator.generate_keys()["private_key"]
+        # Fix: Call generate_keys() only once to get matching key pair
+        keys = key_generator.generate_keys()
+        public_key, private_key = keys["public_key"], keys["private_key"]
         rri_data = RRISchema(
             relay_id=str(uuid.uuid4()),
             relay_ip=generate_random_ip(),
@@ -42,7 +44,7 @@ def generate_test_rri_data(count: int = 10) -> None:
             capabilities=["routing", "forwarding"],
             metadata={"location": "datacenter-1"},
             public_key=public_key,
-            public_key_hash=key_generator.get_keys()["public_key_hash"],
+            public_key_hash=keys["public_key_hash"],  # Use hash from same key generation
             private_key_debug=private_key if debug else None,
             program_version=__version__
         ).dict()
