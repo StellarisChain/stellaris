@@ -167,7 +167,7 @@ def encrypt_routing_chain(request: Request = None) -> dict:
         if do_encrypt:
             # Ensure next_route is a dict before accessing public_key
             if isinstance(next_route, dict) and 'public_key' in next_route:
-                encrypted_child_route, encrypted_message_hash, encrypted_fernet = encrypt_route_message(
+                encrypted_child_route, encrypted_message_hash, encrypted_fernet = encrypt_message_return_hash(
                     message = child_route,
                     public_key = next_route['public_key'] # Encrypt from the next route's public key, which would appear before this on the route map
                 )

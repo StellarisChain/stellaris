@@ -37,7 +37,7 @@ def encrypt_fernet(public_key: str, fernet_key_str: str) -> bytes:
     fernet_encrypted = rsa.encrypt(fernet_key_str.encode('utf-8'), rsa_public)
     return fernet_encrypted
 
-def encrypt_message(message: str, public_key: str, fernet_key_str: str) -> bytes:
+def encrypt_message(message: str | dict, public_key: str, fernet_key_str: str) -> bytes:
     """
     Encrypt a message using hybrid encryption (AES + RSA).
     For large messages, uses AES for the message and RSA for the AES key.
@@ -49,6 +49,10 @@ def encrypt_message(message: str, public_key: str, fernet_key_str: str) -> bytes
     Returns:
         bytes: The encrypted message as bytes (JSON containing encrypted data and key).
     """
+    if isinstance(message, dict):
+        # For dictionary, make a copy and add encrypted_fernet directly
+        message_dict = message.copy()  # Make a copy to avoid modifying the original
+        message: str = json.dumps(message_dict, indent=2)
     message_bytes = message.encode('utf-8')
     
     # The key from file should be a base64-encoded string that we can use directly
@@ -350,53 +354,78 @@ def find_correct_key_using_routing_logic(current_block: dict, encrypted_fernet: 
     import os
     from util.filereader import read_key_file
     
-    logger.info("Attempting to find correct key using routing chain logic...")
+    logger.info("Finding correct key using routing chain encryption logic...")
     
     # In routing chain encryption, the current block was encrypted with the next block's public key
-    # So we need to find which relay's private key can decrypt this encrypted_fernet
+    # The public key in the current block is NOT the one used for encryption - it's just metadata
+    # We need to find which relay's private key can actually decrypt this encrypted_fernet
     
-    # Get the public key from the current block (this is actually the public key that was used for encryption)
-    block_public_key = current_block.get("public_key")
+    logger.info("Testing all available private keys to find the one that can decrypt this block...")
     
-    if block_public_key:
-        logger.info("Trying to find the private key that matches the public key in the current block...")
-        
-        # Try to find the corresponding private key
-        key_directories = ["data/rri", "data/local", "data/nri"]
-        
-        for key_dir in key_directories:
-            if not os.path.exists(key_dir):
-                continue
-                
-            key_files = [f for f in os.listdir(key_dir) if f.endswith('.key')]
+    # Get all available key files from all directories
+    key_directories = ["data/rri", "data/local", "data/nri"]
+    tested_keys = []
+    
+    for key_dir in key_directories:
+        if not os.path.exists(key_dir):
+            logger.debug(f"Directory {key_dir} does not exist, skipping...")
+            continue
             
-            for key_file in key_files:
-                try:
-                    relay_id = key_file.replace('.key', '')
-                    private_key = read_key_file(relay_id, key_dir.split('/')[-1])
-                    
-                    # Extract public key from this private key
-                    extracted_public = extract_public_key_from_private(private_key)
-                    
-                    if extracted_public and extracted_public.strip() == block_public_key.strip():
-                        logger.info(f"Found matching key pair for relay {relay_id}")
-                        
-                        # Test if this key can actually decrypt the encrypted_fernet
-                        try:
-                            rsa_private = rsa.PrivateKey.load_pkcs1(private_key.encode('utf-8'))
-                            test_decrypt = rsa.decrypt(encrypted_fernet, rsa_private)
-                            logger.info(f"SUCCESS: Key {relay_id} can decrypt the encrypted_fernet!")
-                            return private_key
-                        except Exception as decrypt_error:
-                            logger.warning(f"Key {relay_id} matches public key but cannot decrypt: {decrypt_error}")
-                            continue
-                            
-                except Exception as e:
-                    logger.debug(f"Failed to test key {key_file}: {str(e)}")
+        key_files = [f for f in os.listdir(key_dir) if f.endswith('.key')]
+        logger.info(f"Testing {len(key_files)} keys from {key_dir}")
+        
+        for key_file in key_files:
+            try:
+                relay_id = key_file.replace('.key', '')
+                private_key = read_key_file(relay_id, key_dir.split('/')[-1])
+                
+                if not private_key:
+                    logger.debug(f"Could not read key file for relay {relay_id}")
                     continue
+                
+                # Test if this key can decrypt the encrypted_fernet
+                try:
+                    rsa_private = rsa.PrivateKey.load_pkcs1(private_key.encode('utf-8'))
+                    test_decrypt = rsa.decrypt(encrypted_fernet, rsa_private)
+                    
+                    logger.info(f"SUCCESS: Found working private key for relay {relay_id} in {key_dir}")
+                    
+                    # Additional verification: extract public key for debugging
+                    extracted_public = extract_public_key_from_private(private_key)
+                    if extracted_public:
+                        extracted_hash = hashlib.sha256(extracted_public.encode()).hexdigest()[:16]
+                        logger.info(f"Working key's public key hash: {extracted_hash}")
+                        
+                        # Compare with the block's public key
+                        block_public = current_block.get("public_key")
+                        if block_public:
+                            block_hash = hashlib.sha256(block_public.encode()).hexdigest()[:16]
+                            logger.info(f"Block's public key hash: {block_hash}")
+                            
+                            if extracted_hash == block_hash:
+                                logger.info("✓ Working key matches block's public key")
+                            else:
+                                logger.info("ℹ Working key differs from block's public key (expected in routing chain)")
+                    
+                    tested_keys.append(f"{relay_id}({key_dir.split('/')[-1]}):✓")
+                    return private_key
+                    
+                except Exception as decrypt_error:
+                    # This key doesn't work, continue to next
+                    tested_keys.append(f"{relay_id}({key_dir.split('/')[-1]}):✗")
+                    logger.debug(f"Key {relay_id} cannot decrypt: {str(decrypt_error)[:50]}")
+                    continue
+                    
+            except Exception as e:
+                logger.debug(f"Failed to test key {key_file}: {str(e)}")
+                tested_keys.append(f"{key_file}:ERROR")
+                continue
     
-    logger.warning("Could not find key using routing logic, falling back to brute force search...")
-    return find_correct_private_key_for_block(current_block, encrypted_fernet)
+    logger.error(f"No working private key found. Tested {len(tested_keys)} keys:")
+    for i, test_result in enumerate(tested_keys):
+        logger.error(f"  {i+1:2d}. {test_result}")
+    
+    return None
 
 def diagnose_and_fix_key_mismatch(current_block: dict, private_key: str, encrypted_fernet: bytes) -> str:
     """

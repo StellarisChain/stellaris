@@ -169,8 +169,9 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
             # Debug public key information
             public_key = current_block.get("public_key")
             if public_key:
-                print(f"Public key present, length: {len(public_key)}")
+                #print(f"Public key present, length: {len(public_key)}")
                 #print(f"Public key starts with: {public_key[:50]}...")
+                pass
             else:
                 print("No public key found in current block")
             
