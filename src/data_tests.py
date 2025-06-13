@@ -15,6 +15,8 @@ from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector
 from schema.RRISchema import RRISchema
 from util.filereader import save_key_file
 
+LAST_RUN_FILE = os.path.join("testoutput", "last_run.txt")
+
 def generate_random_ip() -> str:
     """Generate a random IP address."""
     return f"{random.randint(1, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}"
@@ -37,7 +39,22 @@ def generate_test_rri_data(count: int = 10) -> None:
         save_ri(rri_data["relay_id"], rri_data, "rri")
         save_key_file(rri_data["relay_id"], private_key, "rri")
 
-def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "default", max_map_size: Optional[int] = 20) -> None:
+def decrypt_test_rri_map(file_path: Optional[str] = None):
+    if not file_path:
+        with open(LAST_RUN_FILE, 'r') as f:
+            line = f.readline().strip()
+            if line.startswith("rri_test_map:"):
+                file_path = line.split("rri_test_map:")[1]
+            else:
+                print("No RRI test map found in last_run.txt")
+                return
+    if not os.path.exists(file_path):
+        print(f"File {file_path} does not exist.")
+        return
+    with open(file_path, 'r') as f:
+        routing_chain_str = f.read()
+
+def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "default", max_map_size: Optional[int] = 20, testdecrypt: Optional[bool] = False) -> None:
     relay_map: RoutingMap = generate_relay_map(max_map_size=max_map_size)
     request: Request = Request(routing_map=relay_map, target="example.com")
     if method == "default" :
@@ -54,6 +71,10 @@ def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "defa
     file_name = os.path.join("testoutput", f"test_rri_map_{str(uuid.uuid4())}.json")
     with open(file_name, 'w') as f:
         f.write(str(routing_chain))
+    if os.path.exists(LAST_RUN_FILE):
+        os.remove(LAST_RUN_FILE)
+    with open(LAST_RUN_FILE, 'w') as f:
+        f.write(f"rri_test_map:{file_name}\n")
     print(f"Generated RRI map saved to {file_name}")
     benchmark_stats = benchmark_collector.get_stats()
     if benchmark:
@@ -65,6 +86,8 @@ def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "defa
         file_name = f"testoutput/benchmark_rri_map_{str(uuid.uuid4())}.json"
         print(f"Benchmark data saved to {file_name}")
         benchmark_collector.export_to_json(file_name)
+    if testdecrypt:
+        decrypt_test_rri_map(file_path=file_name)
 
 if __name__ == "__main__":
     os.makedirs("testoutput", exist_ok=True)  # Ensure the testoutput directory exists
@@ -86,11 +109,19 @@ if __name__ == "__main__":
     rri_map_parser.add_argument("--method", type=str, default="default", choices=["default", "threaded", "batched", "all"], 
                                help="Method to use for routing chain generation (default: default)")
     rri_map_parser.add_argument("--mapsize", type=int, default=20, help="Maximum size of the relay map (default: 20). Note: generating large maps may take time. (Grows exponentially)")
+    rri_map_parser.add_argument("--testdecrypt", type="store_true", help="Runs the decryption test after generating the map")
+    
+    # RRI map decryption subcommand
+    rri_decrypt_parser = rri_subparsers.add_parser('decrypt', help='Decrypt test RRI map from file')
+    rri_decrypt_parser.add_argument("--file", type=str, help="Path to the RRI map file to decrypt. If not provided, uses the last generated map from last_run.txt")
     
     args = parser.parse_args()
 
     """
-        Example usage: python src/data_tests.py rri map --benchmark --method threaded --mapsize 25
+        Example usage: 
+        python src/data_tests.py rri map --benchmark --method threaded --mapsize 25
+        python src/data_tests.py rri decrypt --file testoutput/test_rri_map_abc123.json
+        python src/data_tests.py rri decrypt  # Uses last generated map
     """
     
     if args.command == 'rri':
@@ -98,7 +129,9 @@ if __name__ == "__main__":
             generate_test_rri_data(args.count)
             print(f"Generated {args.count} test RRI entries.")
         elif args.rri_command == 'map':
-            generate_test_rri_map(benchmark=args.benchmark, method=args.method, max_map_size=args.mapsize)
+            generate_test_rri_map(benchmark=args.benchmark, method=args.method, max_map_size=args.mapsize, testdecrypt=args.testdecrypt)
+        elif args.rri_command == 'decrypt':
+            decrypt_test_rri_map(file_path=args.file)
         else:
             rri_parser.print_help()
     else:
