@@ -15,7 +15,8 @@ class RRISchema(BaseModel):
     metadata: Optional[Dict[str, Any]] = {}
     public_key: Optional[str] = None
     public_key_hash: Optional[str] = None
-    fernet_key: Optional[str] = None
+    fernet_key: Optional[str] = None # deprecated
+    encrypted_fernet: Optional[str | bytes] = None
     fernet_key_hash: Optional[str] = None
     program_version: Optional[str] = None
     
