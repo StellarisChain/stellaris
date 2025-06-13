@@ -12,3 +12,4 @@ rsa
 psutil
 fastapi[standard]
 kytan-py
+modern-benchmark

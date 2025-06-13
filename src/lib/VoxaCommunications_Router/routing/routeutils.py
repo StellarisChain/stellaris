@@ -9,7 +9,7 @@ from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.cryptography.encryptionutils import encrypt_message, encrypt_message_return_hash, encrypt_route_message
 from util.logging import log
 from util.jsonutils import serialize_for_json, serialize_dict_for_json
-from util.benchmark import benchmark
+from modern_benchmark import benchmark
 
 """
 Developer Note:
