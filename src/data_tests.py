@@ -184,11 +184,21 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
                 print("No public key found in current block")
             
             next_block = decrypt_routing_chain_block_previous(current_block, private_key)
+            
+            # Check if we've reached the end of the routing chain
+            if next_block is None:
+                print(f"Reached the end of routing chain at block: {current_block_id}")
+                print("SUCCESS: Routing chain decryption completed successfully!")
+                running = False
+                break
+                
             current_block = next_block
         except Exception as e:
             print(f"Decryption complete or error occurred: {e}")
             print(traceback.format_exception(type(e), value=e, tb=e.__traceback__))
             running = False
+    
+    # Save the final decrypted result (or the last successfully decrypted block)
     current_block_str: str = json.dumps(current_block, indent=2)
     output_file = os.path.join("testoutput", f"decrypted_rri_map_{str(uuid.uuid4())}.json")
     with open(output_file, 'w') as f:
@@ -261,6 +271,8 @@ if __name__ == "__main__":
     """
         Example usage: 
         python src/data_tests.py rri map --benchmark --method threaded --mapsize 25 --testdecrypt
+        python src/data_tests.py rri map --method default --mapsize 6 --testdecrypt
+        python src/data_tests.py rri generate --count 20
         python src/data_tests.py rri decrypt  # Uses last generated map
     """
     

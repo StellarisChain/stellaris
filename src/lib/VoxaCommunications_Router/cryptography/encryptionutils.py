@@ -193,13 +193,13 @@ def decrypt_message(encrypted_message: bytes, private_key: str, encrypted_fernet
     try:
         # Load the RSA private key
         rsa_private = rsa.PrivateKey.load_pkcs1(private_key.encode('utf-8'))
-        logger.debug(f"Successfully loaded RSA private key")
+        #logger.debug(f"Successfully loaded RSA private key")
         
         # Extract public key from private key for comparison
         extracted_public_key = extract_public_key_from_private(private_key)
         rsa_public = rsa.PublicKey.load_pkcs1(extracted_public_key.encode('utf-8')) if extracted_public_key else None
-        if extracted_public_key:
-            logger.debug(f"Extracted public key from private key: {extracted_public_key[:50]}...")
+        #if extracted_public_key:
+            #logger.debug(f"Extracted public key from private key: {extracted_public_key[:50]}...")
         
         # Decrypt the Fernet key using RSA
         try:
