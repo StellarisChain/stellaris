@@ -66,7 +66,7 @@ def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key
     try:
         return decrypt_routing_chain_block(block, private_key, encrypted_fernet)
     except Exception as e:
-        if "RSA decryption failed" in str(e):
+        if ("RSA decryption failed" in str(e)) and debug:
             logger.warning(f"Initial decryption failed with provided key: {str(e)}")
             logger.info("Attempting to find correct private key...")
             

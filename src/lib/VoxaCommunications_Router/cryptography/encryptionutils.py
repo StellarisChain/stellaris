@@ -33,7 +33,7 @@ def encrypt_fernet(public_key: str, fernet_key_str: str) -> bytes:
         public_key (str): The RSA public key in PEM format.
     Returns:
         bytes: The encrypted Fernet key as bytes."""
-    rsa_public = rsa.PublicKey.load_pkcs1(public_key.encode('utf-8'))
+    rsa_public = rsa.PublicKey.load_pkcs1(public_key.encode('utf-8'), format='PEM')
     fernet_encrypted = rsa.encrypt(fernet_key_str.encode('utf-8'), rsa_public)
     return fernet_encrypted
 
