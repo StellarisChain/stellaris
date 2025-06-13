@@ -26,7 +26,8 @@ You can also only decrypt it one block at a time.
 
 logger = log()
 benchmark_collector = BenchmarkCollector(max_history=1000)
-debug = dict(read_json_from_namespace("config.dev")).get("debug", False)
+debug: bool = dict(read_json_from_namespace("config.dev")).get("debug", False)
+retry_decrypt: bool = dict(read_json_from_namespace("config.dev")).get("retry-decrypt", False)
 
 def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key: str) -> dict | str | None:
     """Decrypt the previous block in the routing chain.
@@ -66,7 +67,7 @@ def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key
     try:
         return decrypt_routing_chain_block(block, private_key, encrypted_fernet)
     except Exception as e:
-        if ("RSA decryption failed" in str(e)) and debug:
+        if ("RSA decryption failed" in str(e)) and debug and retry_decrypt:
             logger.warning(f"Initial decryption failed with provided key: {str(e)}")
             logger.info("Attempting to find correct private key...")
             
