@@ -48,7 +48,7 @@ def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "defa
         # For benchmarking purposes, run all methods and compare
         routing_chain = request.generate_routing_chain()
         request.routing_chain_from_func(encrypt_routing_chain_threaded)
-        request.routing_chain_from_func(encrypt_routing_chain_sequential_batched)
+        request.routing_chain_from_func(encrypt_routing_chain_sequential_batched, batch_size=10)
     file_name = os.path.join("testoutput", f"test_rri_map_{str(uuid.uuid4())}.json")
     with open(file_name, 'w') as f:
         f.write(str(routing_chain))
@@ -60,7 +60,7 @@ def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "defa
         for name, stats in benchmark_stats.items():
             print(f"  {name}: {stats.total_calls} calls, "
               f"avg {stats.avg_time*1000:.2f}ms")
-        file_name = f"testoutput/benchmark_rri_map{str(uuid.uuid4())}.json"
+        file_name = f"testoutput/benchmark_rri_map_{str(uuid.uuid4())}.json"
         print(f"Benchmark data saved to {file_name}")
         benchmark_collector.export_to_json(file_name)
 

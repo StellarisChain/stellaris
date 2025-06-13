@@ -27,7 +27,7 @@ class Request:
             raise ValueError("Routing chain could not be generated. Ensure the routing map is properly configured.")
         return self.routing_chain
     
-    def routing_chain_from_func(self, func) -> dict:
+    def routing_chain_from_func(self, func, **kwargs) -> dict:
         """Generate the routing chain using a custom function.
 
         Args:
@@ -36,7 +36,7 @@ class Request:
         Returns:
             dict: The generated routing chain.
         """
-        self.routing_chain = func(self)
+        self.routing_chain = func(self, **kwargs)
         if not self.routing_chain:
             raise ValueError("Routing chain could not be generated. Ensure the custom function is properly implemented.")
         return self.routing_chain
