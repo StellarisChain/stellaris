@@ -52,6 +52,14 @@ def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key
 
     encrypted_fernet = previous_block.get("encrypted_fernet")
     block = previous_block.get("child_route")
+    public_key = previous_block.get("public_key")
+    debug_private_key = previous_block.get("private_key_debug", None) if debug else None
+
+    if debug:
+        if debug_private_key != private_key:
+            logger.warning("Debug private key does not match the provided private key.")
+            logger.debug(f"Passed private key: {private_key[:50]}, stored debug key: {debug_private_key[:50]}")
+    logger.debug(f"Decrypting block with public key: {public_key[:50]}")
 
     if not encrypted_fernet or not block:
         logger.error("Previous block is missing 'encrypted_fernet' or 'child_route'.")

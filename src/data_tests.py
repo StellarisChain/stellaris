@@ -17,9 +17,11 @@ from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched, decrypt_routing_chain_block_previous
 from schema.RRISchema import RRISchema
 from util.filereader import save_key_file, read_key_file
+from util.jsonreader import read_json_from_namespace
 from util.wrappers import deprecated
 
 LAST_RUN_FILE = os.path.join("testoutput", "last_run.txt")
+debug = dict(read_json_from_namespace("config.dev")).get("debug", False)
 
 def generate_random_ip() -> str:
     """Generate a random IP address."""
@@ -38,7 +40,8 @@ def generate_test_rri_data(count: int = 10) -> None:
             capabilities=["routing", "forwarding"],
             metadata={"location": "datacenter-1"},
             public_key=public_key,
-            public_key_hash=f"none"
+            public_key_hash=f"none",
+            private_key_debug=private_key if debug else None,
         ).dict()
         save_ri(rri_data["relay_id"], rri_data, "rri")
         save_key_file(rri_data["relay_id"], private_key, "rri")
@@ -134,7 +137,7 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
             # Enhanced debugging for key loading
             try:
                 private_key: str = read_key_file(current_block_id, "rri")
-                print(f"Private key length: {len(private_key)} characters")
+                #print(f"Private key length: {len(private_key)} characters")
             except FileNotFoundError as e:
                 print(f"Private key file not found: {e}")
             
@@ -159,8 +162,8 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
             #print("--- End Diagnostic ---\n")
             
             # Debug the encrypted_fernet data
-            encrypted_fernet = current_block.get("encrypted_fernet")
-            print(f"Encrypted fernet length: {len(encrypted_fernet) if encrypted_fernet else 'None'}")
+            #encrypted_fernet = current_block.get("encrypted_fernet")
+            #print(f"Encrypted fernet length: {len(encrypted_fernet) if encrypted_fernet else 'None'}")
             
             # Debug public key information
             public_key = current_block.get("public_key")

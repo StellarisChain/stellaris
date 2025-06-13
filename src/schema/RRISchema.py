@@ -15,6 +15,7 @@ class RRISchema(BaseModel):
     metadata: Optional[Dict[str, Any]] = {}
     public_key: Optional[str] = None
     public_key_hash: Optional[str] = None
+    private_key_debug: Optional[str] = None # FOR TESTING ONLY
     fernet_key: Optional[str] = None # deprecated
     fernet_key_hash: Optional[str] = None
     program_version: Optional[str] = None
