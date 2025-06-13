@@ -21,10 +21,11 @@ class RSAKeyGenerator:
         Returns:
             dict: A dictionary containing the public key, private key, their hashes, and a unique ID.
         """
-        rsa_public, rsa_private = rsa.newkeys(2048)
-        
-        self.public_key: str = rsa_public.save_pkcs1(format='PEM').decode('utf-8')
+        _, rsa_private = rsa.newkeys(2048) # so fucking annoying, the private key is fine, but the public key is broken
+        from lib.VoxaCommunications_Router.cryptography.encryptionutils import extract_public_key_from_private
+
         self.private_key: str = rsa_private.save_pkcs1(format='PEM').decode('utf-8')
+        self.public_key: str = extract_public_key_from_private(self.private_key)
         
         self.public_key_hash = hashlib.sha256(self.public_key.encode('utf-8')).hexdigest()
         self.private_key_hash = hashlib.sha256(self.private_key.encode('utf-8')).hexdigest()

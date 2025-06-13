@@ -45,6 +45,7 @@ def generate_test_rri_data(count: int = 10) -> None:
         ).dict()
         save_ri(rri_data["relay_id"], rri_data, "rri")
         save_key_file(rri_data["relay_id"], private_key, "rri")
+        save_key_file(f"{rri_data['relay_id']}_pub", public_key, "rri") # remove after debugging
 
 @deprecated("Debugging function, not for production use")
 def diagnose_decryption_issue(current_block: dict, private_key: str) -> dict:

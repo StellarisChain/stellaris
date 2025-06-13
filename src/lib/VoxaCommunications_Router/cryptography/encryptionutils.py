@@ -189,6 +189,7 @@ def decrypt_message(encrypted_message: bytes, private_key: str, encrypted_fernet
         
         # Extract public key from private key for comparison
         extracted_public_key = extract_public_key_from_private(private_key)
+        rsa_public = rsa.PublicKey.load_pkcs1(extracted_public_key.encode('utf-8')) if extracted_public_key else None
         if extracted_public_key:
             logger.debug(f"Extracted public key from private key: {extracted_public_key[:50]}...")
         
@@ -199,6 +200,7 @@ def decrypt_message(encrypted_message: bytes, private_key: str, encrypted_fernet
         except Exception as e:
             logger.error(f"Failed to decrypt Fernet key with RSA: {str(e)}")
             logger.error(f"Private key hash: {hashlib.sha256(private_key.encode()).hexdigest()[:16]}...")
+            logger.error(f"Private key (first 50 chars): {private_key[:50]}")
             logger.error(f"Public key hash: {hashlib.sha256(extracted_public_key.encode()).hexdigest()[:16]}...")
             logger.error(f"Encrypted fernet length: {len(encrypted_fernet)}")
             logger.error(f"Encrypted fernet (first 50 chars): {encrypted_fernet[:50]}")
@@ -206,6 +208,17 @@ def decrypt_message(encrypted_message: bytes, private_key: str, encrypted_fernet
             # Additional debugging information
             if extracted_public_key:
                 logger.error(f"Expected public key (from private): {extracted_public_key[:100]}...")
+                logger.warning("Attempting to encrypt test message with extracted public key to verify key pair...")
+                try:
+                    test_message = b"test_key_validation"
+                    test_encrypted = rsa.encrypt(test_message, rsa_public)
+                    test_decrypted = rsa.decrypt(test_encrypted, rsa_private)
+                    if test_decrypted == test_message:
+                        logger.info("Key pair is valid - encryption/decryption test succeeded")
+                    else:
+                        logger.error("Key pair is invalid - encryption/decryption test failed")
+                except Exception as test_error:
+                    logger.error(f"Key pair test failed: {str(test_error)}")
             
             raise Exception(f"RSA decryption failed - key mismatch or corrupted data: {str(e)}")
         
