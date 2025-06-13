@@ -1,6 +1,7 @@
 import json
 import base64
 import threading
+from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from copy import deepcopy
@@ -94,7 +95,7 @@ def encrypt_routing_chain(request: Request = None) -> dict:
 
 
 @benchmark(name="routing.encrypt_chain_threaded", slow_threshold_ms=5000, collector=benchmark_collector)
-def encrypt_routing_chain_threaded(request: Request = None, max_workers: int = 4) -> dict:
+def encrypt_routing_chain_threaded(request: Request = None, max_workers: Optional[int] = 4) -> dict:
     """Multi-threaded variant of encrypt_routing_chain for better performance.
 
     Args:
@@ -207,7 +208,7 @@ def encrypt_routing_chain_threaded(request: Request = None, max_workers: int = 4
 
 
 @benchmark(name="routing.encrypt_chain_batched", slow_threshold_ms=3000, collector=benchmark_collector)
-def encrypt_routing_chain_sequential_batched(request: Request = None, batch_size: int = 5) -> dict:
+def encrypt_routing_chain_sequential_batched(request: Request = None, batch_size: Optional[int] = 5) -> dict:
     """Sequential batched variant that processes routes in dependency-aware batches.
     
     This approach maintains encryption order dependencies while still providing
