@@ -109,7 +109,7 @@ if __name__ == "__main__":
     rri_map_parser.add_argument("--method", type=str, default="default", choices=["default", "threaded", "batched", "all"], 
                                help="Method to use for routing chain generation (default: default)")
     rri_map_parser.add_argument("--mapsize", type=int, default=20, help="Maximum size of the relay map (default: 20). Note: generating large maps may take time. (Grows exponentially)")
-    rri_map_parser.add_argument("--testdecrypt", type="store_true", help="Runs the decryption test after generating the map")
+    rri_map_parser.add_argument("--testdecrypt", type=bool, help="Runs the decryption test after generating the map")
     
     # RRI map decryption subcommand
     rri_decrypt_parser = rri_subparsers.add_parser('decrypt', help='Decrypt test RRI map from file')

@@ -100,10 +100,11 @@ def encrypt_routing_chain(request: Request = None) -> dict:
                     public_key = next_route['public_key'] # Encrypt from the next route's public key, which would appear before this on the route map
                 )
                 child_route = serialize_for_json(encrypted_child_route)
+                next_route["encrypted_fernet"] = serialize_for_json(encrypted_fernet)
+                new_routing_map.set_nth_child_route(i - 1, next_route)
             else:
                 logger.error(f"Next route is not a valid dict or missing public_key for route {i}")
                 do_encrypt = False
-        
         new_routing_map.set_nth_child_route(i, child_route)
 
     logger.info(f"Final routing reached")
@@ -176,6 +177,12 @@ def encrypt_routing_chain_threaded(request: Request = None, max_workers: Optiona
                         public_key=next_route['public_key']
                     )
                     child_route = serialize_for_json(encrypted_child_route)
+                    # Set encrypted fernet in the next route (needs thread-safe access)
+                    with map_lock:
+                        current_next_route = new_routing_map.get_nth_child_route(route_index - 1)
+                        if isinstance(current_next_route, dict):
+                            current_next_route["encrypted_fernet"] = serialize_for_json(encrypted_fernet)
+                            new_routing_map.set_nth_child_route(route_index - 1, current_next_route)
                 else:
                     logger.error(f"Next route is not a valid dict or missing public_key for route {route_index}")
                     do_encrypt = False
@@ -295,6 +302,9 @@ def encrypt_routing_chain_sequential_batched(request: Request = None, batch_size
                             public_key=next_route['public_key']
                         )
                         child_route = serialize_for_json(encrypted_child_route)
+                        # Set encrypted fernet in the next route
+                        next_route["encrypted_fernet"] = serialize_for_json(encrypted_fernet)
+                        new_routing_map.set_nth_child_route(route_index - 1, next_route)
                     except Exception as e:
                         logger.error(f"Encryption failed for route {route_index}: {str(e)}")
                         do_encrypt = False
