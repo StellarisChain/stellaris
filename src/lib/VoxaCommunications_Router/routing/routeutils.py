@@ -9,7 +9,7 @@ from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.cryptography.encryptionutils import encrypt_message, encrypt_message_return_hash, encrypt_route_message
 from util.logging import log
 from util.jsonutils import serialize_for_json, serialize_dict_for_json
-from modern_benchmark import benchmark
+from modern_benchmark import benchmark, BenchmarkCollector
 
 """
 Developer Note:
@@ -23,10 +23,11 @@ You can also only decrypt it one block at a time.
 """
 
 logger = log()
+benchmark_collector = BenchmarkCollector(max_history=1000)
 
 # TODO: Encrypt the routing data, for now it remains a utf-8 string in binary format.
 # TODO: Make this more efficent, over 20 in a request results in a lot of data to encrypt which can take hours
-@benchmark(name="routing.encrypt_chain", slow_threshold_ms=10000)
+@benchmark(name="routing.encrypt_chain", slow_threshold_ms=10000, collector=benchmark_collector)
 def encrypt_routing_chain(request: Request = None) -> dict:
     """Encrypt the routing chain of a request.
 
@@ -92,7 +93,7 @@ def encrypt_routing_chain(request: Request = None) -> dict:
     return new_routing_map.routes
 
 
-@benchmark(name="routing.encrypt_chain_threaded", slow_threshold_ms=5000)
+@benchmark(name="routing.encrypt_chain_threaded", slow_threshold_ms=5000, collector=benchmark_collector)
 def encrypt_routing_chain_threaded(request: Request = None, max_workers: int = 4) -> dict:
     """Multi-threaded variant of encrypt_routing_chain for better performance.
 
@@ -205,7 +206,7 @@ def encrypt_routing_chain_threaded(request: Request = None, max_workers: int = 4
     return new_routing_map.routes
 
 
-@benchmark(name="routing.encrypt_chain_batched", slow_threshold_ms=3000)
+@benchmark(name="routing.encrypt_chain_batched", slow_threshold_ms=3000, collector=benchmark_collector)
 def encrypt_routing_chain_sequential_batched(request: Request = None, batch_size: int = 5) -> dict:
     """Sequential batched variant that processes routes in dependency-aware batches.
     

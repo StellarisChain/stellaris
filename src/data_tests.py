@@ -10,6 +10,7 @@ from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
+from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector
 from schema.RRISchema import RRISchema
 
 def generate_random_ip() -> str:
@@ -33,7 +34,7 @@ def generate_test_rri_data(count: int = 10) -> None:
         ).dict()
         save_ri(str(uuid.uuid4()), rri_data, "rri")
 
-def generate_test_rri_map():
+def generate_test_rri_map(benchmark: bool = False) -> None:
     relay_map: RoutingMap = generate_relay_map(max_map_size=20)
     request: Request = Request(routing_map=relay_map, target="example.com")
     routing_chain = request.generate_routing_chain()
@@ -41,6 +42,12 @@ def generate_test_rri_map():
     with open(file_name, 'w') as f:
         f.write(str(routing_chain))
     print(f"Generated RRI map saved to {file_name}")
+    benchmark_stats = benchmark_collector.get_stats()
+    if benchmark:
+        for name, stats in benchmark_stats.items():
+            print(f"  {name}: {stats.total_calls} calls, "
+              f"avg {stats.avg_time*1000:.2f}ms")
+
 if __name__ == "__main__":
     os.makedirs("testoutput", exist_ok=True)  # Ensure the testoutput directory exists
     # CLI interface with subparsers for different data generation tasks
@@ -57,6 +64,7 @@ if __name__ == "__main__":
     
     # RRI map generation subcommand
     rri_map_parser = rri_subparsers.add_parser('map', help='Generate and display RRI relay map')
+    rri_map_parser.add_argument("--benchmark", action="store_true", help="Enable benchmarking output for the map generation")
     
     args = parser.parse_args()
     
@@ -65,7 +73,7 @@ if __name__ == "__main__":
             generate_test_rri_data(args.count)
             print(f"Generated {args.count} test RRI entries.")
         elif args.rri_command == 'map':
-            generate_test_rri_map()
+            generate_test_rri_map(benchmark=args.benchmark)
         else:
             rri_parser.print_help()
     else:
