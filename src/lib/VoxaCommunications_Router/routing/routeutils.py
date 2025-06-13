@@ -53,12 +53,16 @@ def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key
     encrypted_fernet = previous_block.get("encrypted_fernet")
     block = previous_block.get("child_route")
     public_key = previous_block.get("public_key")
-    debug_private_key = previous_block.get("private_key_debug", None) if debug else None
+    public_key_hash = previous_block.get("public_key_hash", None)
+    debug_private_key: str = previous_block.get("private_key_debug", None) if debug else None
 
     if debug:
+        logger.debug(f"Public key hash: {public_key_hash}")
         if debug_private_key != private_key:
             logger.warning("Debug private key does not match the provided private key.")
             logger.debug(f"Passed private key: {private_key[:50]}, stored debug key: {debug_private_key[:50]}")
+        else:
+            logger.debug("Debug private key matches the provided private key.")
     logger.debug(f"Decrypting block with public key: {public_key[:50]}")
 
     if not encrypted_fernet or not block:

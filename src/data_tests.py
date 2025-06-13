@@ -40,7 +40,7 @@ def generate_test_rri_data(count: int = 10) -> None:
             capabilities=["routing", "forwarding"],
             metadata={"location": "datacenter-1"},
             public_key=public_key,
-            public_key_hash=f"none",
+            public_key_hash=key_generator.get_keys()["public_key_hash"],
             private_key_debug=private_key if debug else None,
         ).dict()
         save_ri(rri_data["relay_id"], rri_data, "rri")

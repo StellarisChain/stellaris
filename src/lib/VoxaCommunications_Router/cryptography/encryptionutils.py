@@ -199,6 +199,7 @@ def decrypt_message(encrypted_message: bytes, private_key: str, encrypted_fernet
         except Exception as e:
             logger.error(f"Failed to decrypt Fernet key with RSA: {str(e)}")
             logger.error(f"Private key hash: {hashlib.sha256(private_key.encode()).hexdigest()[:16]}...")
+            logger.error(f"Public key hash: {hashlib.sha256(extracted_public_key.encode()).hexdigest()[:16]}...")
             logger.error(f"Encrypted fernet length: {len(encrypted_fernet)}")
             logger.error(f"Encrypted fernet (first 50 chars): {encrypted_fernet[:50]}")
             
