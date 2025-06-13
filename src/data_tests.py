@@ -13,6 +13,7 @@ from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched
 from schema.RRISchema import RRISchema
+from util.filereader import save_key_file
 
 def generate_random_ip() -> str:
     """Generate a random IP address."""
@@ -33,7 +34,8 @@ def generate_test_rri_data(count: int = 10) -> None:
             public_key=public_key,
             public_key_hash=f"none"
         ).dict()
-        save_ri(str(uuid.uuid4()), rri_data, "rri")
+        save_ri(rri_data["relay_id"], rri_data, "rri")
+        save_key_file(rri_data["relay_id"], private_key, "rri")
 
 def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "default", max_map_size: Optional[int] = 20) -> None:
     relay_map: RoutingMap = generate_relay_map(max_map_size=max_map_size)

@@ -1,4 +1,5 @@
 import io
+from typing import Optional
 
 def file_to_str(filename: str) -> str:
     with io.open(filename, "r") as file:
@@ -15,9 +16,9 @@ def read_key_file(key_name: str):
     except Exception as e:
         raise Exception(f"An error occurred while reading the key file: {str(e)}")
     
-def save_key_file(key_name: str, key_data: str):
+def save_key_file(key_name: str, key_data: str, datapath: Optional[str] = "local"):
     key_name = f"{key_name}.key"
-    key_dir = f"data/local/{key_name}"
+    key_dir = f"data/{datapath}/{key_name}"
     try:
         with io.open(key_dir, "w") as file:
             file.write(key_data)
