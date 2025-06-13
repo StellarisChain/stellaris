@@ -26,7 +26,7 @@ You can also only decrypt it one block at a time.
 logger = log()
 benchmark_collector = BenchmarkCollector(max_history=1000)
 
-def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key: str):
+def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key: str) -> dict | str | None:
     """Decrypt the previous block in the routing chain.
 
     Args:

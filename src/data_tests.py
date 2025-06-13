@@ -4,16 +4,19 @@ import random
 import argparse
 import sys
 import os
+import json
+import traceback
 import io
+from copy import deepcopy
 from typing import Optional
 from lib.VoxaCommunications_Router.util.ri_utils import save_ri
 from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
-from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched
+from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched, decrypt_routing_chain_block_previous
 from schema.RRISchema import RRISchema
-from util.filereader import save_key_file
+from util.filereader import save_key_file, read_key_file
 
 LAST_RUN_FILE = os.path.join("testoutput", "last_run.txt")
 
@@ -52,7 +55,28 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
         print(f"File {file_path} does not exist.")
         return
     with open(file_path, 'r') as f:
-        routing_chain_str = f.read()
+        routing_chain_str: str = f.read()
+    # dosent work in production, as nodes and relays only see one block at a time
+    routing_chain: dict = json.loads(routing_chain_str)
+    current_block: dict = deepcopy(routing_chain)
+    running = True
+    print("Decrypting routing chain...")
+    while running:
+        try:
+            current_block_id: str = current_block.get("relay_id")
+            print(f"Current block ID: {current_block_id}")
+            private_key: str = read_key_file(current_block_id, "rri") # only works on the test generated rri
+            next_block = decrypt_routing_chain_block_previous(current_block, private_key)
+            current_block = next_block
+        except Exception as e:
+            print(f"Decryption complete or error occurred: {e}")
+            print(traceback.format_exception(type(e), value=e, tb=e.__traceback__))
+            running = False
+    current_block_str: str = json.dumps(current_block, indent=2)
+    output_file = os.path.join("testoutput", f"decrypted_rri_map_{str(uuid.uuid4())}.json")
+    with open(output_file, 'w') as f:
+        f.write(current_block_str)
+    print(f"Decrypted routing chain saved to {output_file}")
 
 def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "default", max_map_size: Optional[int] = 20, testdecrypt: Optional[bool] = False) -> None:
     relay_map: RoutingMap = generate_relay_map(max_map_size=max_map_size)
@@ -68,7 +92,7 @@ def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "defa
         routing_chain = request.generate_routing_chain()
         request.routing_chain_from_func(encrypt_routing_chain_threaded, max_workers=1)
         request.routing_chain_from_func(encrypt_routing_chain_sequential_batched, batch_size=10)
-    file_name = os.path.join("testoutput", f"test_rri_map_{str(uuid.uuid4())}.json")
+    file_name = os.path.join("testoutput", f"encrypted_rri_map_{str(uuid.uuid4())}.json")
     with open(file_name, 'w') as f:
         f.write(str(routing_chain))
     if os.path.exists(LAST_RUN_FILE):

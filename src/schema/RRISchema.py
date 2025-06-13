@@ -16,7 +16,6 @@ class RRISchema(BaseModel):
     public_key: Optional[str] = None
     public_key_hash: Optional[str] = None
     fernet_key: Optional[str] = None # deprecated
-    encrypted_fernet: Optional[str | bytes] = None
     fernet_key_hash: Optional[str] = None
     program_version: Optional[str] = None
     

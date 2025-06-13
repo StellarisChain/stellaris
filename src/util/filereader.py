@@ -5,9 +5,9 @@ def file_to_str(filename: str) -> str:
     with io.open(filename, "r") as file:
         return file.read()
     
-def read_key_file(key_name: str):
+def read_key_file(key_name: str, datapath: Optional[str] = "local") -> str:
     key_name = f"{key_name}.key"
-    key_dir = f"data/local/{key_name}"
+    key_dir = f"data/{datapath}/{key_name}"
     try:
         with io.open(key_dir, "r") as file:
             return file.read()
