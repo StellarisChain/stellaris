@@ -7,7 +7,7 @@ from threading import Lock
 from copy import deepcopy
 from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
-from lib.VoxaCommunications_Router.cryptography.encryptionutils import encrypt_message, encrypt_message_return_hash, encrypt_route_message
+from lib.VoxaCommunications_Router.cryptography.encryptionutils import encrypt_message, encrypt_message_return_hash, encrypt_route_message, decrypt_message
 from util.logging import log
 from util.jsonutils import serialize_for_json, serialize_dict_for_json
 from modern_benchmark import benchmark, BenchmarkCollector
@@ -25,6 +25,22 @@ You can also only decrypt it one block at a time.
 
 logger = log()
 benchmark_collector = BenchmarkCollector(max_history=1000)
+
+@benchmark(name="routing.decrypt_block", slow_threshold_ms=1000, collector=benchmark_collector)
+def decrypt_routing_chain_block(block: str | bytes, private_key: str, encrypted_fernet: str | bytes) -> dict | str | None:
+    if isinstance(block, str):
+        block: bytes = base64.b64decode(block.encode('utf-8'))
+    if isinstance(encrypted_fernet, str):
+        encrypted_fernet: bytes = base64.b64decode(encrypted_fernet.encode('utf-8'))
+    decrypted_block: str = decrypt_message(block, private_key, encrypted_fernet)
+    if decrypted_block:
+        try:
+            decrypted_block_json: dict = json.loads(decrypted_block)
+            return decrypted_block_json
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode decrypted block as JSON: {str(e)}")
+            return decrypted_block
+    return None
 
 # TODO: Encrypt the routing data, for now it remains a utf-8 string in binary format.
 # TODO: Make this more efficent, over 20 in a request results in a lot of data to encrypt which can take hours

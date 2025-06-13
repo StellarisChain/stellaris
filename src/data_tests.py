@@ -119,8 +119,7 @@ if __name__ == "__main__":
 
     """
         Example usage: 
-        python src/data_tests.py rri map --benchmark --method threaded --mapsize 25
-        python src/data_tests.py rri decrypt --file testoutput/test_rri_map_abc123.json
+        python src/data_tests.py rri map --benchmark --method threaded --mapsize 25 --testdecrypt
         python src/data_tests.py rri decrypt  # Uses last generated map
     """
     
