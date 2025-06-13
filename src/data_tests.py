@@ -60,6 +60,9 @@ def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "defa
         for name, stats in benchmark_stats.items():
             print(f"  {name}: {stats.total_calls} calls, "
               f"avg {stats.avg_time*1000:.2f}ms")
+        file_name = f"testoutput/benchmark_rri_map{str(uuid.uuid4())}.json"
+        print(f"Benchmark data saved to {file_name}")
+        benchmark_collector.export_to_json(file_name)
 
 if __name__ == "__main__":
     os.makedirs("testoutput", exist_ok=True)  # Ensure the testoutput directory exists
