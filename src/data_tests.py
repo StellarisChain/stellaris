@@ -94,7 +94,7 @@ def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "defa
         request.routing_chain_from_func(encrypt_routing_chain_sequential_batched, batch_size=10)
     file_name = os.path.join("testoutput", f"encrypted_rri_map_{str(uuid.uuid4())}.json")
     with open(file_name, 'w') as f:
-        f.write(str(routing_chain))
+        f.write(json.dumps(routing_chain, indent=2))
     if os.path.exists(LAST_RUN_FILE):
         os.remove(LAST_RUN_FILE)
     with open(LAST_RUN_FILE, 'w') as f:
