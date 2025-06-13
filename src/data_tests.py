@@ -35,8 +35,8 @@ def generate_test_rri_data(count: int = 10) -> None:
         ).dict()
         save_ri(str(uuid.uuid4()), rri_data, "rri")
 
-def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "default") -> None:
-    relay_map: RoutingMap = generate_relay_map(max_map_size=20)
+def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "default", max_map_size: Optional[int] = 20) -> None:
+    relay_map: RoutingMap = generate_relay_map(max_map_size=max_map_size)
     request: Request = Request(routing_map=relay_map, target="example.com")
     if method == "default" :
         routing_chain = request.generate_routing_chain()
@@ -47,7 +47,7 @@ def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "defa
     elif method == "all":
         # For benchmarking purposes, run all methods and compare
         routing_chain = request.generate_routing_chain()
-        request.routing_chain_from_func(encrypt_routing_chain_threaded)
+        request.routing_chain_from_func(encrypt_routing_chain_threaded, max_workers=1)
         request.routing_chain_from_func(encrypt_routing_chain_sequential_batched, batch_size=10)
     file_name = os.path.join("testoutput", f"test_rri_map_{str(uuid.uuid4())}.json")
     with open(file_name, 'w') as f:
@@ -83,11 +83,12 @@ if __name__ == "__main__":
     rri_map_parser.add_argument("--benchmark", action="store_true", help="Enable benchmarking output for the map generation")
     rri_map_parser.add_argument("--method", type=str, default="default", choices=["default", "threaded", "batched", "all"], 
                                help="Method to use for routing chain generation (default: default)")
+    rri_map_parser.add_argument("--mapsize", type=int, default=20, help="Maximum size of the relay map (default: 20). Note: generating large maps may take time. (Grows exponentially)")
     
     args = parser.parse_args()
 
     """
-        Example usage: python src/data_tests.py rri map --benchmark --method threaded
+        Example usage: python src/data_tests.py rri map --benchmark --method threaded --mapsize 25
     """
     
     if args.command == 'rri':
@@ -95,7 +96,7 @@ if __name__ == "__main__":
             generate_test_rri_data(args.count)
             print(f"Generated {args.count} test RRI entries.")
         elif args.rri_command == 'map':
-            generate_test_rri_map(benchmark=args.benchmark, method=args.method)
+            generate_test_rri_map(benchmark=args.benchmark, method=args.method, max_map_size=args.mapsize)
         else:
             rri_parser.print_help()
     else:

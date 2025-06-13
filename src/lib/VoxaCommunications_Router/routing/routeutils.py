@@ -95,9 +95,9 @@ def encrypt_routing_chain(request: Request = None) -> dict:
 
 
 @benchmark(name="routing.encrypt_chain_threaded", slow_threshold_ms=5000, collector=benchmark_collector)
-def encrypt_routing_chain_threaded(request: Request = None, max_workers: Optional[int] = 4) -> dict:
+def encrypt_routing_chain_threaded(request: Request = None, max_workers: Optional[int] = 1) -> dict:
     """Multi-threaded variant of encrypt_routing_chain for better performance.
-
+    NOTE: In the current implementation, max_workers past will result in errors
     Args:
         request (Request): The request object containing the routing map.
         max_workers (int): Maximum number of worker threads to use.
