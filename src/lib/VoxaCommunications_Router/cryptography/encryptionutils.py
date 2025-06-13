@@ -114,15 +114,72 @@ def decrypt_message(encrypted_message: bytes, private_key: str, encrypted_fernet
     Args:
         encrypted_message (bytes): The encrypted message as bytes.
         private_key (str): The RSA private key in PEM format.
+        encrypted_fernet (bytes): The encrypted Fernet key.
 
     Returns:
         str: The decrypted message.
     """
-    rsa_private = rsa.PrivateKey.load_pkcs1(private_key.encode('utf-8'))
-    fernet_key = rsa.decrypt(encrypted_fernet, rsa_private)
-    fernet = Fernet(fernet_key)
+    try:
+        # Load the RSA private key
+        rsa_private = rsa.PrivateKey.load_pkcs1(private_key.encode('utf-8'))
+        logger.debug(f"Successfully loaded RSA private key")
+        
+        # Decrypt the Fernet key using RSA
+        try:
+            fernet_key = rsa.decrypt(encrypted_fernet, rsa_private)
+            logger.debug(f"Successfully decrypted Fernet key, length: {len(fernet_key)}")
+        except Exception as e:
+            logger.error(f"Failed to decrypt Fernet key with RSA: {str(e)}")
+            logger.error(f"Private key hash: {hashlib.sha256(private_key.encode()).hexdigest()[:16]}...")
+            logger.error(f"Encrypted fernet length: {len(encrypted_fernet)}")
+            logger.error(f"Encrypted fernet (first 50 chars): {encrypted_fernet[:50]}")
+            raise Exception(f"RSA decryption failed - key mismatch or corrupted data: {str(e)}")
+        
+        # Use the decrypted Fernet key to decrypt the message
+        try:
+            fernet = Fernet(fernet_key)
+            decrypted_message = fernet.decrypt(encrypted_message)
+            decrypted_message = decrypted_message.decode('utf-8')
+            logger.debug(f"Successfully decrypted message, length: {len(decrypted_message)}")
+            return decrypted_message
+        except Exception as e:
+            logger.error(f"Failed to decrypt message with Fernet: {str(e)}")
+            raise Exception(f"Fernet decryption failed: {str(e)}")
+            
+    except Exception as e:
+        if "RSA decryption failed" in str(e) or "Fernet decryption failed" in str(e):
+            raise  # Re-raise our custom exceptions
+        logger.error(f"Unexpected error in decrypt_message: {str(e)}")
+        raise Exception(f"Decryption failed: {str(e)}")
 
-    decrypted_message = fernet.decrypt(encrypted_message)
-    decrypted_message = decrypted_message.decode('utf-8')
+def validate_rsa_key_pair(public_key: str, private_key: str) -> bool:
+    """
+    Validate that a public and private key pair match by testing encryption/decryption.
     
-    return decrypted_message
+    Args:
+        public_key (str): The RSA public key in PEM format.
+        private_key (str): The RSA private key in PEM format.
+    
+    Returns:
+        bool: True if the keys match, False otherwise.
+    """
+    try:
+        # Load the keys
+        rsa_public = rsa.PublicKey.load_pkcs1(public_key.encode('utf-8'))
+        rsa_private = rsa.PrivateKey.load_pkcs1(private_key.encode('utf-8'))
+        
+        # Test message
+        test_message = b"test_key_validation"
+        
+        # Encrypt with public key
+        encrypted = rsa.encrypt(test_message, rsa_public)
+        
+        # Try to decrypt with private key
+        decrypted = rsa.decrypt(encrypted, rsa_private)
+        
+        # Check if the decrypted message matches the original
+        return decrypted == test_message
+        
+    except Exception as e:
+        logger.debug(f"Key validation failed: {str(e)}")
+        return False

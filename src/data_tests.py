@@ -42,6 +42,69 @@ def generate_test_rri_data(count: int = 10) -> None:
         save_ri(rri_data["relay_id"], rri_data, "rri")
         save_key_file(rri_data["relay_id"], private_key, "rri")
 
+def diagnose_decryption_issue(current_block: dict, private_key: str) -> dict:
+    """
+    Diagnose potential issues with decryption by analyzing the block and key data.
+    
+    Args:
+        current_block (dict): The current routing block
+        private_key (str): The private key being used for decryption
+    
+    Returns:
+        dict: Diagnostic information about the decryption issue
+    """
+    diagnosis = {
+        "issues_found": [],
+        "suggestions": [],
+        "key_validation": None,
+        "data_validation": {}
+    }
+    
+    # Check if required fields exist
+    required_fields = ["relay_id", "encrypted_fernet", "child_route"]
+    for field in required_fields:
+        if field not in current_block or not current_block[field]:
+            diagnosis["issues_found"].append(f"Missing or empty field: {field}")
+    
+    # Validate the public key in the block
+    public_key = current_block.get("public_key")
+    if public_key:
+        try:
+            # Try to validate the key pair
+            from lib.VoxaCommunications_Router.cryptography.encryptionutils import validate_rsa_key_pair
+            diagnosis["key_validation"] = validate_rsa_key_pair(public_key, private_key)
+            if not diagnosis["key_validation"]:
+                diagnosis["issues_found"].append("Private key does not match public key in block")
+                diagnosis["suggestions"].append("Check if the correct private key is being loaded")
+        except Exception as e:
+            diagnosis["issues_found"].append(f"Key validation failed: {str(e)}")
+    else:
+        diagnosis["issues_found"].append("No public key found in current block")
+    
+    # Validate encrypted_fernet data
+    encrypted_fernet = current_block.get("encrypted_fernet")
+    if encrypted_fernet:
+        try:
+            # Try to decode if it's base64
+            import base64
+            if isinstance(encrypted_fernet, str):
+                decoded_fernet = base64.b64decode(encrypted_fernet.encode('utf-8'))
+                diagnosis["data_validation"]["encrypted_fernet_length"] = len(decoded_fernet)
+            else:
+                diagnosis["data_validation"]["encrypted_fernet_length"] = len(encrypted_fernet)
+        except Exception as e:
+            diagnosis["issues_found"].append(f"Invalid encrypted_fernet data: {str(e)}")
+    
+    # Add general suggestions
+    if diagnosis["issues_found"]:
+        diagnosis["suggestions"].extend([
+            "Verify that the correct private key file is being loaded",
+            "Check if the routing chain was generated with different keys",
+            "Ensure the key files haven't been corrupted or modified"
+        ])
+    
+    return diagnosis
+
 def decrypt_test_rri_map(file_path: Optional[str] = None):
     if not file_path:
         with open(LAST_RUN_FILE, 'r') as f:
@@ -65,7 +128,66 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
         try:
             current_block_id: str = current_block.get("relay_id")
             print(f"Current block ID: {current_block_id}")
-            private_key: str = read_key_file(current_block_id, "rri") # only works on the test generated rri
+            
+            # Enhanced debugging for key loading
+            try:
+                private_key: str = read_key_file(current_block_id, "rri")
+                print(f"Successfully loaded private key for block {current_block_id}")
+                print(f"Private key length: {len(private_key)} characters")
+                print(f"Private key starts with: {private_key[:50]}...")
+            except FileNotFoundError as e:
+                print(f"Private key file not found: {e}")
+                print(f"Looking for file: data/rri/{current_block_id}.key")
+                # Try alternative key loading approaches
+                try:
+                    # Try loading from local directory instead
+                    private_key: str = read_key_file(current_block_id, "local")
+                    print(f"Found private key in local directory instead")
+                except FileNotFoundError:
+                    print(f"Key not found in local directory either")
+                    # List available key files for debugging
+                    import os
+                    rri_dir = "data/rri"
+                    local_dir = "data/local"
+                    if os.path.exists(rri_dir):
+                        rri_files = os.listdir(rri_dir)
+                        print(f"Available files in {rri_dir}: {rri_files}")
+                    if os.path.exists(local_dir):
+                        local_files = os.listdir(local_dir)
+                        print(f"Available files in {local_dir}: {local_files}")
+                    raise
+            
+            # Run diagnostic check before attempting decryption
+            print("\n--- Diagnostic Information ---")
+            diagnosis = diagnose_decryption_issue(current_block, private_key)
+            
+            if diagnosis["issues_found"]:
+                print("Issues found:")
+                for issue in diagnosis["issues_found"]:
+                    print(f"  - {issue}")
+            
+            if diagnosis["suggestions"]:
+                print("Suggestions:")
+                for suggestion in diagnosis["suggestions"]:
+                    print(f"  - {suggestion}")
+            
+            if diagnosis["key_validation"] is not None:
+                print(f"Key pair validation: {'PASSED' if diagnosis['key_validation'] else 'FAILED'}")
+            
+            print("--- End Diagnostic ---\n")
+            
+            # Debug the encrypted_fernet data
+            encrypted_fernet = current_block.get("encrypted_fernet")
+            print(f"Encrypted fernet length: {len(encrypted_fernet) if encrypted_fernet else 'None'}")
+            
+            # Debug public key information
+            public_key = current_block.get("public_key")
+            if public_key:
+                print(f"Public key present, length: {len(public_key)}")
+                print(f"Public key starts with: {public_key[:50]}...")
+            else:
+                print("No public key found in current block")
+            
             next_block = decrypt_routing_chain_block_previous(current_block, private_key)
             current_block = next_block
         except Exception as e:
