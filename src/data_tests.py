@@ -5,12 +5,13 @@ import argparse
 import sys
 import os
 import io
+from typing import Optional
 from lib.VoxaCommunications_Router.util.ri_utils import save_ri
 from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
-from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector
+from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched
 from schema.RRISchema import RRISchema
 
 def generate_random_ip() -> str:
@@ -34,10 +35,20 @@ def generate_test_rri_data(count: int = 10) -> None:
         ).dict()
         save_ri(str(uuid.uuid4()), rri_data, "rri")
 
-def generate_test_rri_map(benchmark: bool = False) -> None:
+def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "default") -> None:
     relay_map: RoutingMap = generate_relay_map(max_map_size=20)
     request: Request = Request(routing_map=relay_map, target="example.com")
-    routing_chain = request.generate_routing_chain()
+    if method == "default" :
+        routing_chain = request.generate_routing_chain()
+    elif method == "threaded":
+        routing_chain = request.routing_chain_from_func(encrypt_routing_chain_threaded)
+    elif method == "batched":
+        routing_chain = request.routing_chain_from_func(encrypt_routing_chain_sequential_batched)
+    elif method == "all":
+        # For benchmarking purposes, run all methods and compare
+        routing_chain = request.generate_routing_chain()
+        request.routing_chain_from_func(encrypt_routing_chain_threaded)
+        request.routing_chain_from_func(encrypt_routing_chain_sequential_batched)
     file_name = os.path.join("testoutput", f"test_rri_map_{str(uuid.uuid4())}.json")
     with open(file_name, 'w') as f:
         f.write(str(routing_chain))
@@ -67,15 +78,21 @@ if __name__ == "__main__":
     # RRI map generation subcommand
     rri_map_parser = rri_subparsers.add_parser('map', help='Generate and display RRI relay map')
     rri_map_parser.add_argument("--benchmark", action="store_true", help="Enable benchmarking output for the map generation")
+    rri_map_parser.add_argument("--method", type=str, default="default", choices=["default", "threaded", "batched"], 
+                               help="Method to use for routing chain generation (default: default)")
     
     args = parser.parse_args()
+
+    """
+        Example usage: python src/data_tests.py rri map --benchmark --method threaded
+    """
     
     if args.command == 'rri':
         if args.rri_command == 'generate':
             generate_test_rri_data(args.count)
             print(f"Generated {args.count} test RRI entries.")
         elif args.rri_command == 'map':
-            generate_test_rri_map(benchmark=args.benchmark)
+            generate_test_rri_map(benchmark=args.benchmark, method=args.method)
         else:
             rri_parser.print_help()
     else:
