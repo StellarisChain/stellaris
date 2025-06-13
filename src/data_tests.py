@@ -14,11 +14,13 @@ from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
-from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched, decrypt_routing_chain_block_previous
+from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched, decrypt_routing_chain_block_previous, decrypt_routing_chain_block
 from schema.RRISchema import RRISchema
 from util.filereader import save_key_file, read_key_file
 from util.jsonreader import read_json_from_namespace
 from util.wrappers import deprecated
+
+__version__ = "0.1.0-TEST"
 
 LAST_RUN_FILE = os.path.join("testoutput", "last_run.txt")
 debug = dict(read_json_from_namespace("config.dev")).get("debug", False)
@@ -42,6 +44,7 @@ def generate_test_rri_data(count: int = 10) -> None:
             public_key=public_key,
             public_key_hash=key_generator.get_keys()["public_key_hash"],
             private_key_debug=private_key if debug else None,
+            program_version=__version__
         ).dict()
         save_ri(rri_data["relay_id"], rri_data, "rri")
         save_key_file(rri_data["relay_id"], private_key, "rri")
@@ -130,7 +133,9 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
     current_block: dict = deepcopy(routing_chain)
     running = True
     print("Decrypting routing chain...")
+    i = -1
     while running:
+        i += 1
         try:
             current_block_id: str = current_block.get("relay_id")
             print(f"Current block ID: {current_block_id}")
@@ -168,6 +173,7 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
             
             # Debug public key information
             public_key = current_block.get("public_key")
+            encrypted_fernet = current_block.get("encrypted_fernet")
             if public_key:
                 #print(f"Public key present, length: {len(public_key)}")
                 #print(f"Public key starts with: {public_key[:50]}...")
