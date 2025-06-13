@@ -26,6 +26,36 @@ You can also only decrypt it one block at a time.
 logger = log()
 benchmark_collector = BenchmarkCollector(max_history=1000)
 
+def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key: str):
+    """Decrypt the previous block in the routing chain.
+
+    Args:
+        previous_block (str | dict): The previous block to decrypt.
+        private_key (str): The RSA private key for decryption.
+
+    Returns:
+        dict | str | None: The decrypted block as a dictionary or string, or None if decryption fails.
+    """
+    if isinstance(previous_block, str):
+        try:
+            previous_block: dict = json.loads(previous_block)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode previous block as JSON: {str(e)}")
+            return None
+
+    if not isinstance(previous_block, dict):
+        logger.error("Previous block is not a valid dictionary.")
+        return None
+
+    encrypted_fernet = previous_block.get("encrypted_fernet")
+    block = previous_block.get("child_route")
+
+    if not encrypted_fernet or not block:
+        logger.error("Previous block is missing 'encrypted_fernet' or 'child_route'.")
+        return None
+
+    return decrypt_routing_chain_block(block, private_key, encrypted_fernet)
+
 @benchmark(name="routing.decrypt_block", slow_threshold_ms=1000, collector=benchmark_collector)
 def decrypt_routing_chain_block(block: str | bytes, private_key: str, encrypted_fernet: str | bytes) -> dict | str | None:
     if isinstance(block, str):
