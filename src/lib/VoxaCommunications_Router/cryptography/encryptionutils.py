@@ -93,7 +93,7 @@ def encrypt_route_message(message: dict | str, public_key: str) -> tuple[bytes, 
     message_hash = hashlib.sha256(json_str_message.encode('utf-8')).hexdigest()  # Original message's hash, used to verify integrity
     return encrypted_message, message_hash, encrypted_fernet    
 
-def encrypt_message_return_hash(message: str, public_key: str) -> tuple[bytes, str, bytes]:
+def encrypt_message_return_hash(message: str | dict, public_key: str) -> tuple[bytes, str, bytes]:
     """
     Encrypt a message using the provided RSA public key and return the encrypted message along with its hash.
 
@@ -104,6 +104,10 @@ def encrypt_message_return_hash(message: str, public_key: str) -> tuple[bytes, s
     Returns:
         tuple: A tuple containing the encrypted message as bytes and the orginal message's SHA-256 hash as a hex string.
     """
+    if isinstance(message, dict):
+        # For dictionary, make a copy and add encrypted_fernet directly
+        message_dict = message.copy()  # Make a copy to avoid modifying the original
+        message: str = json.dumps(message_dict, indent=2)
     fernet_key = generate_fernet_key()
     encrypted_message = encrypt_message(message, public_key, fernet_key)
     encrypted_fernet = encrypt_fernet(public_key, fernet_key)
