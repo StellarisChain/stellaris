@@ -78,7 +78,7 @@ if __name__ == "__main__":
     # RRI map generation subcommand
     rri_map_parser = rri_subparsers.add_parser('map', help='Generate and display RRI relay map')
     rri_map_parser.add_argument("--benchmark", action="store_true", help="Enable benchmarking output for the map generation")
-    rri_map_parser.add_argument("--method", type=str, default="default", choices=["default", "threaded", "batched"], 
+    rri_map_parser.add_argument("--method", type=str, default="default", choices=["default", "threaded", "batched", "all"], 
                                help="Method to use for routing chain generation (default: default)")
     
     args = parser.parse_args()
