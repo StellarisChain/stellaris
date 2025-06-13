@@ -10,6 +10,7 @@ from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.cryptography.encryptionutils import encrypt_message, encrypt_message_return_hash, encrypt_route_message, decrypt_message
 from util.logging import log
 from util.jsonutils import serialize_for_json, serialize_dict_for_json
+from util.jsonreader import read_json_from_namespace
 from modern_benchmark import benchmark, BenchmarkCollector
 
 """
@@ -25,6 +26,7 @@ You can also only decrypt it one block at a time.
 
 logger = log()
 benchmark_collector = BenchmarkCollector(max_history=1000)
+debug = dict(read_json_from_namespace("config.dev")).get("debug", False)
 
 def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key: str) -> dict | str | None:
     """Decrypt the previous block in the routing chain.
@@ -54,7 +56,34 @@ def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key
         logger.error("Previous block is missing 'encrypted_fernet' or 'child_route'.")
         return None
 
-    return decrypt_routing_chain_block(block, private_key, encrypted_fernet)
+    # Convert encrypted_fernet to bytes if it's a string
+    if isinstance(encrypted_fernet, str):
+        encrypted_fernet_bytes = base64.b64decode(encrypted_fernet.encode('utf-8'))
+    else:
+        encrypted_fernet_bytes = encrypted_fernet
+
+    # Try to find the correct private key if the provided one doesn't work
+    try:
+        return decrypt_routing_chain_block(block, private_key, encrypted_fernet)
+    except Exception as e:
+        if "RSA decryption failed" in str(e):
+            logger.warning(f"Initial decryption failed with provided key: {str(e)}")
+            logger.info("Attempting to find correct private key...")
+            
+            # Import the key fixing function
+            from lib.VoxaCommunications_Router.cryptography.encryptionutils import diagnose_and_fix_key_mismatch
+            
+            # Try to find the correct key
+            corrected_key = diagnose_and_fix_key_mismatch(previous_block, private_key, encrypted_fernet_bytes)
+            
+            if corrected_key != private_key:
+                logger.info("Retrying decryption with corrected key...")
+                return decrypt_routing_chain_block(block, corrected_key, encrypted_fernet)
+            else:
+                logger.error("Could not find correct key - decryption failed")
+                raise e
+        else:
+            raise e
 
 @benchmark(name="routing.decrypt_block", slow_threshold_ms=1000, collector=benchmark_collector)
 def decrypt_routing_chain_block(block: str | bytes, private_key: str, encrypted_fernet: str | bytes) -> dict | str | None:

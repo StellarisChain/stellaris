@@ -2,7 +2,7 @@ import json
 import os
 import io
 
-def read_json_file(file_path):
+def read_json_file(file_path) -> dict:
     """
     Reads a JSON file and returns its content as a dictionary.
     

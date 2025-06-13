@@ -23,8 +23,8 @@ class RSAKeyGenerator:
         """
         rsa_public, rsa_private = rsa.newkeys(2048)
         
-        self.public_key = rsa_public.save_pkcs1().decode('utf-8')
-        self.private_key = rsa_private.save_pkcs1().decode('utf-8')
+        self.public_key: str = rsa_public.save_pkcs1().decode('utf-8')
+        self.private_key: str = rsa_private.save_pkcs1().decode('utf-8')
         
         self.public_key_hash = hashlib.sha256(self.public_key.encode('utf-8')).hexdigest()
         self.private_key_hash = hashlib.sha256(self.private_key.encode('utf-8')).hexdigest()

@@ -17,6 +17,7 @@ from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched, decrypt_routing_chain_block_previous
 from schema.RRISchema import RRISchema
 from util.filereader import save_key_file, read_key_file
+from util.wrappers import deprecated
 
 LAST_RUN_FILE = os.path.join("testoutput", "last_run.txt")
 
@@ -42,6 +43,7 @@ def generate_test_rri_data(count: int = 10) -> None:
         save_ri(rri_data["relay_id"], rri_data, "rri")
         save_key_file(rri_data["relay_id"], private_key, "rri")
 
+@deprecated("Debugging function, not for production use")
 def diagnose_decryption_issue(current_block: dict, private_key: str) -> dict:
     """
     Diagnose potential issues with decryption by analyzing the block and key data.
@@ -132,49 +134,29 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
             # Enhanced debugging for key loading
             try:
                 private_key: str = read_key_file(current_block_id, "rri")
-                print(f"Successfully loaded private key for block {current_block_id}")
                 print(f"Private key length: {len(private_key)} characters")
-                print(f"Private key starts with: {private_key[:50]}...")
             except FileNotFoundError as e:
                 print(f"Private key file not found: {e}")
-                print(f"Looking for file: data/rri/{current_block_id}.key")
-                # Try alternative key loading approaches
-                try:
-                    # Try loading from local directory instead
-                    private_key: str = read_key_file(current_block_id, "local")
-                    print(f"Found private key in local directory instead")
-                except FileNotFoundError:
-                    print(f"Key not found in local directory either")
-                    # List available key files for debugging
-                    import os
-                    rri_dir = "data/rri"
-                    local_dir = "data/local"
-                    if os.path.exists(rri_dir):
-                        rri_files = os.listdir(rri_dir)
-                        print(f"Available files in {rri_dir}: {rri_files}")
-                    if os.path.exists(local_dir):
-                        local_files = os.listdir(local_dir)
-                        print(f"Available files in {local_dir}: {local_files}")
-                    raise
             
             # Run diagnostic check before attempting decryption
-            print("\n--- Diagnostic Information ---")
-            diagnosis = diagnose_decryption_issue(current_block, private_key)
-            
-            if diagnosis["issues_found"]:
-                print("Issues found:")
-                for issue in diagnosis["issues_found"]:
-                    print(f"  - {issue}")
-            
-            if diagnosis["suggestions"]:
-                print("Suggestions:")
-                for suggestion in diagnosis["suggestions"]:
-                    print(f"  - {suggestion}")
-            
-            if diagnosis["key_validation"] is not None:
-                print(f"Key pair validation: {'PASSED' if diagnosis['key_validation'] else 'FAILED'}")
-            
-            print("--- End Diagnostic ---\n")
+            # """ looks ugly
+            #print("\n--- Diagnostic Information ---")
+            #diagnosis = diagnose_decryption_issue(current_block, private_key)
+            #
+            #if diagnosis["issues_found"]:
+            #    print("Issues found:")
+            #    for issue in diagnosis["issues_found"]:
+            #        print(f"  - {issue}")
+            #
+            #if diagnosis["suggestions"]:
+            #    print("Suggestions:")
+            #    for suggestion in diagnosis["suggestions"]:
+            #        print(f"  - {suggestion}")
+            #
+            #if diagnosis["key_validation"] is not None:
+            #    print(f"Key pair validation: {'PASSED' if diagnosis['key_validation'] else 'FAILED'}")
+            #
+            #print("--- End Diagnostic ---\n")
             
             # Debug the encrypted_fernet data
             encrypted_fernet = current_block.get("encrypted_fernet")
@@ -184,7 +166,7 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
             public_key = current_block.get("public_key")
             if public_key:
                 print(f"Public key present, length: {len(public_key)}")
-                print(f"Public key starts with: {public_key[:50]}...")
+                #print(f"Public key starts with: {public_key[:50]}...")
             else:
                 print("No public key found in current block")
             
