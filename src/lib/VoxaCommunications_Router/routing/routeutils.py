@@ -59,7 +59,8 @@ def decrypt_routing_chain_block_previous(previous_block: str | dict, private_key
     logger.debug(f"Decrypting block from relay: {relay_id}")
 
     if not encrypted_fernet or not block:
-        logger.error("Previous block is missing 'encrypted_fernet' or 'child_route'.")
+        # logger.error("Previous block is missing 'encrypted_fernet' or 'child_route'.")
+        # reached the end of the chain
         return None
 
     # Convert encrypted_fernet to bytes if it's a string

@@ -133,6 +133,10 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
     # dosent work in production, as nodes and relays only see one block at a time
     routing_chain: dict = json.loads(routing_chain_str)
     current_block: dict = deepcopy(routing_chain)
+    
+    # Keep track of all decrypted blocks
+    decrypted_blocks = []
+    
     running = True
     print("Decrypting routing chain...")
     i = -1
@@ -142,36 +146,19 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
             current_block_id: str = current_block.get("relay_id")
             print(f"Current block ID: {current_block_id}")
             
+            # Add current block to our collection before processing
+            decrypted_blocks.append({
+                "block_index": i,
+                "relay_id": current_block_id,
+                "block_data": deepcopy(current_block)
+            })
+            
             # Enhanced debugging for key loading
             try:
                 private_key: str = read_key_file(current_block_id, "rri")
                 #print(f"Private key length: {len(private_key)} characters")
             except FileNotFoundError as e:
                 print(f"Private key file not found: {e}")
-            
-            # Run diagnostic check before attempting decryption
-            # """ looks ugly
-            #print("\n--- Diagnostic Information ---")
-            #diagnosis = diagnose_decryption_issue(current_block, private_key)
-            #
-            #if diagnosis["issues_found"]:
-            #    print("Issues found:")
-            #    for issue in diagnosis["issues_found"]:
-            #        print(f"  - {issue}")
-            #
-            #if diagnosis["suggestions"]:
-            #    print("Suggestions:")
-            #    for suggestion in diagnosis["suggestions"]:
-            #        print(f"  - {suggestion}")
-            #
-            #if diagnosis["key_validation"] is not None:
-            #    print(f"Key pair validation: {'PASSED' if diagnosis['key_validation'] else 'FAILED'}")
-            #
-            #print("--- End Diagnostic ---\n")
-            
-            # Debug the encrypted_fernet data
-            #encrypted_fernet = current_block.get("encrypted_fernet")
-            #print(f"Encrypted fernet length: {len(encrypted_fernet) if encrypted_fernet else 'None'}")
             
             # Debug public key information
             public_key = current_block.get("public_key")
@@ -198,12 +185,22 @@ def decrypt_test_rri_map(file_path: Optional[str] = None):
             print(traceback.format_exception(type(e), value=e, tb=e.__traceback__))
             running = False
     
-    # Save the final decrypted result (or the last successfully decrypted block)
-    current_block_str: str = json.dumps(current_block, indent=2)
+    # Save the complete decrypted routing chain
+    complete_decrypted_chain = {
+        "decryption_summary": {
+            "total_blocks_decrypted": len(decrypted_blocks),
+            "success": running == False and "SUCCESS" in locals(),
+            "decryption_order": [block["relay_id"] for block in decrypted_blocks]
+        },
+        "decrypted_blocks": decrypted_blocks,
+        "original_encrypted_chain": routing_chain
+    }
+    
     output_file = os.path.join("testoutput", f"decrypted_rri_map_{str(uuid.uuid4())}.json")
     with open(output_file, 'w') as f:
-        f.write(current_block_str)
-    print(f"Decrypted routing chain saved to {output_file}")
+        f.write(json.dumps(complete_decrypted_chain, indent=2))
+    print(f"Complete decrypted routing chain saved to {output_file}")
+    print(f"Total blocks processed: {len(decrypted_blocks)}")
 
 def generate_test_rri_map(benchmark: bool = False, method: Optional[str] = "default", max_map_size: Optional[int] = 20, testdecrypt: Optional[bool] = False) -> None:
     relay_map: RoutingMap = generate_relay_map(max_map_size=max_map_size)
