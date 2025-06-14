@@ -19,6 +19,7 @@ from kytan import create_client, create_server, KytanError, KytanContextManager
 from util.logging import log, set_log_config
 from util.filereader import file_to_str
 from util.setuputils import setup_directories
+from util.jsonreader import read_json_from_namespace
 #from util.initnode import init_node
 from stores.globalconfig import set_global_config
 from stores.registrycontroller import set_global_registry_manager
@@ -48,6 +49,8 @@ class Main:
         """
         self.logger = logger
         self.first_run = True
+        self.settings: dict = read_json_from_namespace("config.settings")
+        self.features: dict = self.settings.get("features", {})
         self.kytan_controller: Optional[KytanController] = None
         self.registry_manager: Optional[RegistryManager] = None
         self.logger.info("Main class initialized.")
@@ -60,6 +63,16 @@ class Main:
         except Exception as e:
             self.logger.error(f"Failed to initialize Main application: {e}")
             raise
+
+        # Enable Features:
+        if self.features.get("enable-kytan-vpn", False):
+            self.logger.info("Enabling Kytan VPN feature...")
+            self.start_kytan_server()
+
+        if self.features.get("enable-unpnpc-port-forwarding", False):
+            self.logger.info("Enabling UPnP/NPC port forwarding feature...")
+            # TODO: Create a new module "net" in voxacommunications-router for port forwarding, p2p, hole punching, and RTC
+            pass
 
     def _load_configuration(self) -> None:
         """Load and validate application configuration."""

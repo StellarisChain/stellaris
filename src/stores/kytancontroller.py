@@ -54,7 +54,7 @@ class KytanController:
         if not self._server:
             raise RuntimeError("No server instance configured. Set server before calling serve().")
             
-        server_config = self._config.get("server", {})
+        server_config: dict = self._config.get("server", {})
         
         try:
             port = server_config.get("port", 9527)

@@ -1,4 +1,4 @@
-pydantic==2.11.5
+pydantic>=2.11.5
 mypy==1.16.0
 pytest==8.3.5
 kvprocessor>=0.2.14
@@ -14,3 +14,5 @@ fastapi[standard]
 kytan-py>=0.1.0
 modern-benchmark>=0.1.0
 libp2p>=3.23.0
+miniupnpc>=2.3.3
+pystun3>=2.0.0

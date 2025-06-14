@@ -11,6 +11,7 @@
         "enable-wallet-management": true,
         "enable-smart-contracts": false,
         "enable-multi-signature": false,
-        "enable-kytan-vpn": true
+        "enable-kytan-vpn": true,
+        "enable-upnpc-port-forwarding": true
     }
 }
