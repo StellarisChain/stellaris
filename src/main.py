@@ -64,7 +64,15 @@ class Main:
             self.logger.error(f"Failed to initialize Main application: {e}")
             raise
 
-        # Enable Features:
+        # Attempt to run features
+        try:
+            self.run_features()
+        except Exception as e:
+            self.logger.error(f"Failed to run features: {e}")
+            raise
+
+    def run_features(self) -> None:
+        """Run the features described in config.settings."""
         if self.features.get("enable-kytan-vpn", False):
             self.logger.info("Enabling Kytan VPN feature...")
             self.start_kytan_server()
