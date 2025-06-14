@@ -69,7 +69,6 @@ class Main:
             self.run_features()
         except Exception as e:
             self.logger.error(f"Failed to run features: {e}")
-            raise
 
     def run_features(self) -> None:
         """Run the features described in config.settings."""
