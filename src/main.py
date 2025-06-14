@@ -86,7 +86,7 @@ class Main:
             self.logger.info("Enabling Kytan VPN feature...")
             self.start_kytan_server()
 
-        if self.features.get("enable-unpnpc-port-forwarding", False):
+        if self.features.get("enable-upnpc-port-forwarding", False):
             self.logger.info("Enabling UPnP/NPC port forwarding feature...")
             # TODO (In Progress): Create a new module "net" in voxacommunications-router for port forwarding, p2p, hole punching, and RTC
             self.net_manager.setup_upnp()
