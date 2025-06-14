@@ -26,6 +26,7 @@ from stores.registrycontroller import set_global_registry_manager
 from stores.kytancontroller import KytanController, set_kytan_controller, initialize_kytan_controller
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from lib.VoxaCommunications_Router.ri.ri_manager import RIManager
+from lib.VoxaCommunications_Router.net.netmanager import NetManager
 from src import __version__
 
 # Load environment variables and initialize colorama
@@ -60,6 +61,7 @@ class Main:
             self._setup_fastapi()
             self._setup_kytan()
             self._setup_registry()
+            self._setup_netmanager()
         except Exception as e:
             self.logger.error(f"Failed to initialize Main application: {e}")
             raise
@@ -69,6 +71,12 @@ class Main:
             self.run_features()
         except Exception as e:
             self.logger.error(f"Failed to run features: {e}")
+    
+    def _setup_netmanager(self) -> None:
+        """Initialize NetManager for UPnP/NPC port forwarding."""
+        self.logger.info("Setting up NetManager for UPnP/NPC...")
+        self.net_manager = NetManager()
+        self.logger.info("NetManager setup completed.")
 
     def run_features(self) -> None:
         """Run the features described in config.settings."""
@@ -78,7 +86,9 @@ class Main:
 
         if self.features.get("enable-unpnpc-port-forwarding", False):
             self.logger.info("Enabling UPnP/NPC port forwarding feature...")
-            # TODO: Create a new module "net" in voxacommunications-router for port forwarding, p2p, hole punching, and RTC
+            # TODO (In Progress): Create a new module "net" in voxacommunications-router for port forwarding, p2p, hole punching, and RTC
+            self.net_manager.setup_upnp()
+            self.net_manager.add_port_mappings()
             pass
 
     def _load_configuration(self) -> None:
