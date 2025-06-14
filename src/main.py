@@ -10,6 +10,7 @@ import logging
 import uuid
 import io
 import time
+import threading
 from typing import Optional
 from fastapi import FastAPI
 from routes import InternalRouter
@@ -54,6 +55,7 @@ class Main:
         self.features: dict = self.settings.get("features", {})
         self.kytan_controller: Optional[KytanController] = None
         self.registry_manager: Optional[RegistryManager] = None
+        self.kytan_server_thread: Optional[threading.Thread] = None
         self.logger.info("Main class initialized.")
 
         try:
@@ -201,15 +203,31 @@ class Main:
             raise
 
     def start_kytan_server(self) -> None:
-        """Start the Kytan server if configured."""
+        """Start the Kytan server on its own thread if configured."""
         if not self.kytan_controller:
             raise RuntimeError("Kytan controller not initialized")
-            
+        
+        def kytan_server_worker():
+            """Worker function to run Kytan server in a separate thread."""
+            try:
+                self.logger.info("Starting Kytan server in background thread...")
+                self.kytan_controller.serve()
+            except Exception as e:
+                self.logger.error(f"Failed to start Kytan server: {e}")
+                raise
+        
         try:
-            self.logger.info("Starting Kytan server...")
-            self.kytan_controller.serve()
+            # Create and start the server thread
+            self.kytan_server_thread = threading.Thread(
+                target=kytan_server_worker,
+                name="KytanServerThread",
+                daemon=True  # Daemon thread will exit when main program exits
+            )
+            self.kytan_server_thread.start()
+            self.logger.info("Kytan server thread started successfully")
+            
         except Exception as e:
-            self.logger.error(f"Failed to start Kytan server: {e}")
+            self.logger.error(f"Failed to start Kytan server thread: {e}")
             raise
 
     def shutdown(self) -> None:
@@ -222,6 +240,18 @@ class Main:
                 self.logger.info("Kytan controller shutdown completed")
             except Exception as e:
                 self.logger.error(f"Error during Kytan shutdown: {e}")
+        
+        # Wait for Kytan server thread to finish if it's running
+        if self.kytan_server_thread and self.kytan_server_thread.is_alive():
+            try:
+                self.logger.info("Waiting for Kytan server thread to finish...")
+                self.kytan_server_thread.join(timeout=5.0)  # Wait up to 5 seconds
+                if self.kytan_server_thread.is_alive():
+                    self.logger.warning("Kytan server thread did not finish within timeout")
+                else:
+                    self.logger.info("Kytan server thread finished successfully")
+            except Exception as e:
+                self.logger.error(f"Error waiting for Kytan server thread: {e}")
         
         self.logger.info("Application shutdown completed")
 
