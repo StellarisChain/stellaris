@@ -5,13 +5,15 @@ along with their configuration and lifecycle management.
 """
 
 import logging
+import secrets
+import base64
 from typing import Optional, Dict, Any
 from threading import Lock
 
 from kytan import KytanClient, KytanServer
 from kytan.kytan import KytanBase
 from util.jsonreader import read_json_from_namespace
-from util.filereader import file_to_str
+from util.filereader import file_to_str, read_key_file, save_key_file
 
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,18 @@ class KytanController:
             logger.error(f"Failed to load kytan configuration: {e}")
             return {}
         
+    def _generate_key(self, length: Optional[int] = 32) -> str:
+        """Generate a secure random key.
+        
+        Args:
+            length: Length of the key in bytes. Default is 32.
+            
+        Returns:
+            Base64 encoded string of the generated key.
+        """
+        key = secrets.token_bytes(length)
+        return base64.urlsafe_b64encode(key).decode('utf-8')
+        
     def serve(self) -> None:
         """Start the Kytan server with configured parameters.
         
@@ -65,9 +79,11 @@ class KytanController:
             key = ""
             key_file = server_config.get("key_file")
             if key_file:
-                key = file_to_str(key_file) or ""
+                key = read_key_file(key_file, raise_error=False) or ""
                 if not key:
-                    logger.warning(f"Key file '{key_file}' is empty or could not be read")
+                    logger.warning(f"Key file '{key_file}' is empty or could not be read, generating new key.")
+                    key = self._generate_key()
+                    save_key_file(key_file, key)
             
             logger.info(f"Starting Kytan server on {host}:{port}")
             self._server.serve(port=port, bind=host, dns=dns, key=key)

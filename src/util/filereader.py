@@ -1,7 +1,7 @@
 import io
 from typing import Optional
 
-def file_to_str(filename: str, raise_error: Optional[bool]) -> str:
+def file_to_str(filename: str, raise_error: Optional[bool] = True) -> str:
     try:
         with io.open(filename, "r") as file:
             return file.read()
