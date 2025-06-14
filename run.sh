@@ -17,10 +17,10 @@ python -m pip install -r requirements.txt
 # Set PYTHONPATH to include project root and src directory
 export PYTHONPATH="${PYTHONPATH}:$(pwd):$(pwd)/src"
 
-# Read host and port from config/p2p.json
-echo "Reading configuration from config/p2p.json..."
-HOST=$(python -c "import json; config = json.load(open('config/p2p.json')); print(config['host'])")
-PORT=$(python -c "import json; config = json.load(open('config/p2p.json')); print(config['port'])")
+# Read host and port from config/settings.json
+echo "Reading configuration from config/settings.json..."
+HOST=$(python -c "import json; config = json.load(open('config/settings.json')); print(config['server-settings']['host'])")
+PORT=$(python -c "import json; config = json.load(open('config/settings.json')); print(config['server-settings']['port'])")
 
 # Read auto-reload setting from config/dev.json
 echo "Reading auto-reload configuration from config/dev.json..."

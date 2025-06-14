@@ -1,6 +1,10 @@
 {
     "node-network-level": "testnet",
     "node-autoupdate-config": true,
+    "server-settings": {
+        "host": "0.0.0.0",
+        "port": 9000
+    },
     "features": {
         "enable-transaction-fee": true,
         "enable-transaction-signing": true,
