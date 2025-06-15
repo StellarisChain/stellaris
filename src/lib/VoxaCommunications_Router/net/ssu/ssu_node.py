@@ -58,6 +58,7 @@ class SSUNode:
                 packet.raw_to_str()
                 ssu_control_packet: SSUControlPacket = packet.upgrade_to_ssu_control_packet() # See if we can upgrade to SSUControlPacket
                 if ssu_control_packet:
+                    ssu_control_packet.parse_ssu_control()
                     self.logger.info(f"Received SSU Control Packet")
 
                 
