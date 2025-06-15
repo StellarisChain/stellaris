@@ -8,18 +8,18 @@ class NetManager:
         self.program_ports = get_program_ports()
         self.logger = log()
         self.upnp_setup = False
-        self.p2p_setup = False
-        self.host: IHost = None
+        self.libp2p_setup = False
+        self.libp2phost: IHost = None
     
-    async def setup_p2p(self) -> None:
+    async def setup_libp2p(self) -> None:
         """Set up the P2P host."""
         try:
-            self.host = await new_host()
-            self.p2p_setup = True
+            self.libp2phost = await new_host()
+            self.libp2p_setup = True
             self.logger.info("P2P host set up successfully")
         except Exception as e:
             self.logger.error(f"Failed to set up P2P host: {e}")
-            self.p2p_setup = False
+            self.libp2p_setup = False
         
     def setup_upnp(self) -> None:
         """Set up UPnP port forwarding for the program ports."""
