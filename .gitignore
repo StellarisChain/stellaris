@@ -16,3 +16,5 @@ todo.txt
 testoutput
 *.out
 benchmarks
+# Pre-Production files
+*.test.py
