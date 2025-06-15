@@ -27,7 +27,7 @@ from stores.registrycontroller import set_global_registry_manager
 from stores.kytancontroller import KytanController, set_kytan_controller, initialize_kytan_controller
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from lib.VoxaCommunications_Router.ri.ri_manager import RIManager
-from lib.VoxaCommunications_Router.net.netmanager import NetManager
+from src.lib.VoxaCommunications_Router.net.net_manager import NetManager
 from src import __version__
 
 # Load environment variables and initialize colorama
