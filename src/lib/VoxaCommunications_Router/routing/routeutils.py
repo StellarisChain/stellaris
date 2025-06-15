@@ -16,10 +16,11 @@ from modern_benchmark import benchmark, BenchmarkCollector
 """
 Developer Note:
 Take a deep breath, this is a complex and anoying function to write.
-This function is responsible for encrypting the routing chain of a request.
+This module is responsible for encrypting the routing chain of a request.
+This module can also decrypt a block in the routing chain.
 
 Some thoughts:
-When sending, each node/relay only forwards the part that it decrypts, to precent the sender's ip from being exposed.
+When sending, each node/relay only forwards the part that it decrypts, to prevent the sender's ip from being exposed.
 Then each node/relay sends the data back to the previous node/relay, which then forwards it to the next one.
 You can also only decrypt it one block at a time.
 """
