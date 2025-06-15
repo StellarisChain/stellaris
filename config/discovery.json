@@ -6,7 +6,7 @@
     "auto_save_to_storage": true,
     "networks": null,
     "dht_key": "<NOT IN USE>",
-    "node_ports": [9000],
+    "node_ports": [9000, 9999],
     "relay_ports": [8080, 8081, 8082, 3000, 5000, 7000, 8000, 9001, 9002],
     "discovery_enabled": true,
     "scan_local_only": false,
