@@ -12,6 +12,10 @@ class Packet(BaseModel):
         if self.raw_data:
             self.str_data = self.raw_data.decode('utf-8', errors='ignore')
     
+    def str_to_raw(self):
+        if self.str_data:
+            self.raw_data = self.str_data.encode('utf-8', errors='ignore')
+    
     def upgrade_to_ssu_control_packet(self):
         from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket, is_ssu_control_request
         if not is_ssu_control_request(self):

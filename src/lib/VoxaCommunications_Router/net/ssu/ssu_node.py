@@ -60,6 +60,22 @@ class SSUNode:
                 if ssu_control_packet:
                     ssu_control_packet.parse_ssu_control()
                     self.logger.info(f"Received SSU Control Packet")
+                    match ssu_control_packet.ssu_control_command:
+                        case "STATUS":
+                            self.logger.info(f"Received STATUS command with params: {ssu_control_packet.ssu_control_params}")
+                            pass
+                        case "PUNCH":
+                            self.logger.info(f"Received PUNCH command with params: {ssu_control_packet.ssu_control_params}")
+                            response = SSUControlPacket(
+                                str_data='SSU_CONTROL PUNCH',
+                                addr=addr
+                            )
+                            response.parse_ssu_control()
+                            response.str_to_raw()
+                            self.sock.sendto(response.raw_data, addr)
+                            self.logger.info(f"Sent PUNCH response to {addr}")
+                        case _:
+                            self.logger.warning(f"Unknown SSU control command: {ssu_control_packet.ssu_control_command}")
 
                 
             except Exception as e:
