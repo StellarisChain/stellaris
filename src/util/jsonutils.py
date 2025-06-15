@@ -24,3 +24,9 @@ def serialize_for_json(obj):
 def serialize_dict_for_json(data: dict) -> dict:
     """Serialize a dictionary for JSON serialization, handling bytes and other types."""
     return {key: serialize_for_json(value) for key, value in data.items()} if isinstance(data, dict) else data
+
+def lists_to_dict(keys: list, values: list) -> dict:
+    """
+    Convert two lists into a dict, one of keys the other of values
+    """
+    return dict(zip(keys, values))
