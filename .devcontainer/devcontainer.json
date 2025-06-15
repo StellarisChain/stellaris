@@ -8,6 +8,13 @@
 		"ghcr.io/devcontainers-extra/features/pipenv:2": {},
 		"ghcr.io/devcontainers-extra/features/pipx-package:1": {},
 		"ghcr.io/itsmechlark/features/redis-server:1": {}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.vscode-pylance"
+			]
+		}
 	}
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
