@@ -1,0 +1,1 @@
+The direction for p2p of this project is still being determined, at the moment, we probably will move away from kademlia and DHT
