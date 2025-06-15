@@ -1,4 +1,5 @@
 import ipaddress
+from typing import Optional
 from util.jsonreader import read_json_from_namespace
 
 def validate_ip_address(ip_address: str) -> bool:
@@ -68,3 +69,36 @@ def get_program_ports() -> list:
             extract_ports_from_dict(config, ports)
     
     return ports
+
+def build_multiaddr(ip: Optional[str], port: Optional[int | str], protocol: Optional[str] = "tcp", peer_id: Optional[str] = None) -> Optional[str]:
+    """Construct a multiaddr string from IP, port, and protocol.
+
+    Args:
+        ip (str): The IP address.
+        port (int | str): The port number.
+        protocol (str): The protocol (default is "tcp").
+
+    Returns:
+        str: The constructed multiaddr string or None if inputs are invalid.
+    """
+    if not ip or not port:
+        return None
+    
+    if not validate_ip_address(ip):
+        raise ValueError(f"Invalid IP address: {ip}")
+    
+    try:
+        port = int(port)
+        if not (0 < port < 65536):
+            raise ValueError
+    except ValueError:
+        raise ValueError(f"Invalid port number: {port}")
+    
+    if protocol not in ["tcp", "udp"]:
+        raise ValueError(f"Unsupported protocol: {protocol}")
+    
+    ip_version = "ip4" if ipaddress.ip_address(ip).version == 4 else "ip6"
+    addr = f"/{ip_version}/{ip}/{protocol}/{port}"
+    if peer_id:
+        addr += f"/p2p/{peer_id}"
+    return addr
