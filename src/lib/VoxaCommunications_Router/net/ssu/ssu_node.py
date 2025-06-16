@@ -28,6 +28,7 @@ class SSUNode:
         self.running = False
         self.host: str = self.config.get("host")
         self.port: str | int = self.config.get("port")
+        self.peers: list = [] # list of all connections
         if isinstance(self.port, str):
             self.port = int(self.port)
     
@@ -58,6 +59,7 @@ class SSUNode:
         while self.running:
             try:
                 raw_data, addr = await self.loop.run_in_executor(None, self.sock.recvfrom, 4096)
+                self.peers.append(addr)
                 self.logger.info(f"Received {len(raw_data)} bytes from {addr}")
                 packet: Packet | SSUPacket | SSUControlPacket = SSUPacket(raw_data=raw_data, addr=addr) # We are in ssu_node, of course it's an SSUPacket
                 packet.raw_to_str()
@@ -97,7 +99,6 @@ class SSUNode:
                         case _:
                             self.logger.warning(f"Unknown SSU control command: {ssu_control_packet.ssu_control_command}")
 
-                
             except Exception as e:
                 self.logger.error(f"Error receiving data: {e}")
                 await asyncio.sleep(1)

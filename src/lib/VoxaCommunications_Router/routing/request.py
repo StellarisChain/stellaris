@@ -1,4 +1,5 @@
 from typing import Union, Optional
+from pydantic import BaseModel, validator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 
 class Request:
@@ -15,7 +16,7 @@ class Request:
             route: The route to be processed, can be a Route object or a dictionary.
         """
         self.routing_map: RoutingMap = routing_map  # The routing map containing the route information
-        self.request_protocol: str = "tcp" # https, "udp", "http", etc. Default is TCP
+        self.request_protocol: str = "tcp" # "tcp" or "i2p" # Protocol to use for the request, i2p is a fallback. Refer to validate_request_protocol
         self.data: bytes = "placeholder".encode("utf-8") # using a placeholder right now
         self.target: str = target # Where the request is being sent, ex "example.com" or an IP address
         self.routing_chain: dict = {}
@@ -40,3 +41,10 @@ class Request:
         if not self.routing_chain:
             raise ValueError("Routing chain could not be generated. Ensure the custom function is properly implemented.")
         return self.routing_chain
+
+    @validator('request_protocol')
+    def validate_request_protocol(cls, v):
+        allowed_protocols: list[str] = ["tcp", "i2p"]
+        if v not in allowed_protocols:
+            raise ValueError("request_protocol must be 'tcp' or 'i2p'")
+        return v
