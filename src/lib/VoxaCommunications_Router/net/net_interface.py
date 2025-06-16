@@ -1,5 +1,7 @@
 from typing import Optional
 from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
+from lib.VoxaCommunications_Router.net.net_manager import NetManager, get_global_net_manager
+from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routeutils import encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched
@@ -30,8 +32,12 @@ def send_request(request: Request):
     if not request.routing_chain:
         request.routing_chain = generate_encrypted_routing_chain(request)
     
+    net_manager: NetManager = get_global_net_manager()
     match request.request_protocol:
         case "ssu":
+            ssu_node: SSUNode = net_manager.ssu_node
+            if not ssu_node or not ssu_node.running:
+                raise RuntimeError("SSU Node is not running. Cannot send SSU request.")
             pass
         case "i2p":
             pass

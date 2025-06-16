@@ -17,6 +17,7 @@
         "enable-smart-contracts": false,
         "enable-multi-signature": false,
         "enable-kytan-vpn": true,
-        "enable-upnpc-port-forwarding": true
+        "enable-upnpc-port-forwarding": true,
+        "enable-ssu": true
     }
 }

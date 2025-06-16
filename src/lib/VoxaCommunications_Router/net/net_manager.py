@@ -20,6 +20,8 @@ class NetManager:
         self.is_container = detect_container()
         self.ssu_node: SSUNode = None
         self.p2p_config: dict = read_json_from_namespace("config.p2p") or {}
+        self.settings: dict = read_json_from_namespace("config.settings") or {}
+        self.features: dict = self.settings.get("features", {})
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
     
     async def setup_libp2p(self) -> None:
