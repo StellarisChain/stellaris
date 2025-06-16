@@ -30,7 +30,7 @@ RUN mkdir -p data/local data/nri data/rri logs
 RUN chmod +x run.sh
 
 # Expose the port the app runs on
-EXPOSE 9000
+EXPOSE 9999
 
 # Create a non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \
@@ -39,7 +39,7 @@ USER app
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:9000/health')" || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:9999/health')" || exit 1
 
 # Command to run the application using the run.sh script
 CMD ["bash", "run.sh"]
