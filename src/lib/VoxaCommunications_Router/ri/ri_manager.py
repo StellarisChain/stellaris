@@ -31,6 +31,14 @@ class RIManager:
         self.session_token: str = self.registry_manager.session_token
         self.check_initialization()
 
+    def update_registry_manager(self, registry_manager: Optional[RegistryManager] = None) -> None:
+        """Update the registry manager instance."""
+        if registry_manager:
+            self.registry_manager = registry_manager
+        else:
+            self.registry_manager = get_global_registry_manager()
+        self.session_token = self.registry_manager.session_token
+
     def login(self) -> None:
         """Login to the registry if not already logged in."""
         if self.session_token == "":

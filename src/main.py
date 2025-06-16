@@ -204,16 +204,16 @@ class Main:
                 code=code
             )
             
-            login_success = self.registry_manager.login()
+            login_success: bool = self.registry_manager.login()
             if not login_success:
-                raise RuntimeError("Registry login failed - invalid credentials or connection error")
-            
-            self.logger.info("Successfully logged in to the registry")
+                self.logger.warning("Registry login failed - invalid credentials or connection error")
+            else:
+                self.logger.info("Successfully logged in to the registry")
             set_global_registry_manager(self.registry_manager)
             
             self.ri_manager: RIManager = RIManager(type="node")
             self.ri_manager.check_initialization()
-            self.ri_manager.login()
+            # self.ri_manager.login() # Not needed, login done in RegistryManager
 
             if not self.ri_manager.initialized:
                 self.logger.info("RI not initialized, initializing now...")
