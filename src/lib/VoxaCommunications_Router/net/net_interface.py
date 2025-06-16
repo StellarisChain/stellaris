@@ -31,7 +31,7 @@ def send_request(request: Request):
         request.routing_chain = generate_encrypted_routing_chain(request)
     
     match request.request_protocol:
-        case "tcp":
+        case "ssu":
             pass
         case "i2p":
             pass

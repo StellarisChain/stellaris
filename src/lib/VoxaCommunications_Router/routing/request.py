@@ -16,7 +16,7 @@ class Request:
             route: The route to be processed, can be a Route object or a dictionary.
         """
         self.routing_map: RoutingMap = routing_map  # The routing map containing the route information
-        self.request_protocol: str = "tcp" # "tcp" or "i2p" # Protocol to use for the request, i2p is a fallback. Refer to validate_request_protocol
+        self.request_protocol: str = "ssu" # "ssu" or "i2p" # Protocol to use for the request, i2p is a fallback. Refer to validate_request_protocol
         self.data: bytes = "placeholder".encode("utf-8") # using a placeholder right now
         self.target: str = target # Where the request is being sent, ex "example.com" or an IP address
         self.routing_chain: dict = {}
@@ -44,7 +44,7 @@ class Request:
 
     @validator('request_protocol')
     def validate_request_protocol(cls, v):
-        allowed_protocols: list[str] = ["tcp", "i2p"]
+        allowed_protocols: list[str] = ["ssu", "i2p"]
         if v not in allowed_protocols:
-            raise ValueError("request_protocol must be 'tcp' or 'i2p'")
+            raise ValueError("request_protocol must be 'ssu' or 'i2p'")
         return v

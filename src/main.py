@@ -56,6 +56,7 @@ class Main:
         self.kytan_controller: Optional[KytanController] = None
         self.registry_manager: Optional[RegistryManager] = None
         self.kytan_server_thread: Optional[threading.Thread] = None
+        self.net_manager: NetManager = None
         self.logger.info("Main class initialized.")
 
         try:
@@ -73,11 +74,31 @@ class Main:
             self.run_features()
         except Exception as e:
             self.logger.error(f"Failed to run features: {e}")
+
+        # Start serving components
+        try:
+            self._serve()
+        except Exception as e:
+            self.logger.error(f"Failed to serve components: {e}")
+            raise
+    
+    def _serve(self) -> None:
+        """Serve the Node components."""
+        self.logger.info("Starting to serve Node components...")
+        try:
+            if self.net_manager:
+                self.net_manager.serve_ssu_node()
+            else:
+                self.logger.warning("NetManager not initialized, skipping network services.")
+        except Exception as e:
+            self.logger.error(f"Error while serving Node components: {e}")
+            raise
     
     def _setup_netmanager(self) -> None:
         """Initialize NetManager for UPnP/NPC port forwarding."""
         self.logger.info("Setting up NetManager for UPnP/NPC...")
         self.net_manager = NetManager()
+        self.net_manager.setup_ssu_node() # Setup SSU Node
         set_global_net_manager(self.net_manager)
         self.logger.info("NetManager setup completed.")
 

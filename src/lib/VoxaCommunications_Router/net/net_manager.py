@@ -1,5 +1,6 @@
 import miniupnpc
 import traceback
+import asyncio
 import os
 from libp2p import IHost, new_host
 from typing import Optional
@@ -7,6 +8,7 @@ from lib.VoxaCommunications_Router.util.net_utils import get_program_ports
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from util.logging import log
 from util.envutils import detect_container
+from util.jsonreader import read_json_from_namespace
 
 class NetManager:
     def __init__(self):
@@ -17,6 +19,8 @@ class NetManager:
         self.libp2phost: IHost = None
         self.is_container = detect_container()
         self.ssu_node: SSUNode = None
+        self.p2p_config: dict = read_json_from_namespace("config.p2p") or {}
+        self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
     
     async def setup_libp2p(self) -> None:
         """Set up the P2P host."""
@@ -93,6 +97,20 @@ class NetManager:
                     self.logger.error(f"Failed to map port {port}: {e}")
         except Exception as e:
             self.logger.error(f"Failed to add port mappings: {e}")
+    
+    def setup_ssu_node(self) -> None:
+        """Initialize the SSU (Secure Semireliable UDP) node."""
+        self.logger.info("Setting up SSU Node")
+        self.ssu_node = SSUNode(config=self.p2p_config)
+    
+    def serve_ssu_node(self) -> None:
+        """Start the SSU node server."""
+        if not self.ssu_node:
+            self.logger.error("SSU Node not set up. Call setup_ssu_node() first.")
+            return
+        
+        self.loop.create_task(self.ssu_node.serve())
+        self.logger.info("SSU Node server started")
 
 global_net_manager: NetManager = None
 
