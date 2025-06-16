@@ -1,6 +1,17 @@
 # VoxaCommunications: A Decentralized Network for Secure Communication
 
+![TravisBuild](https://app.travis-ci.com/Voxa-Communications/VoxaCommunications-NetNode.svg)
+[![Application Startup](https://github.com/Voxa-Communications/VoxaCommunications-NetNode/actions/workflows/test-run.yml/badge.svg)](https://github.com/Voxa-Communications/VoxaCommunications-NetNode/actions/workflows/test-run.yml)
+![GitHub Sponsors](https://img.shields.io/github/sponsors/Voxa-Communications)
+![GitHub commit activity (branch)](https://img.shields.io/github/commit-activity/t/Voxa-Communications/VoxaCommunications-NetNode/dev)
+
+
+<!--shields generated with shields.io-->
+
 Welcome to **VoxaCommunications-NetNode**, a next-generation decentralized network inspired by TOR but with more: secure request splitting, dynamic routing, and a built-in crypto chain. We’re building a scalable, privacy-focused system, and we need your help!
+
+> [!WARNING]
+> VoxaCommunications-NetNode is still in **active development**, and is not ready for a mainnet deploy
 
 ## Project Vision
 VoxaCommunications aims to create a fast, secure, and decentralized network for communication and data transfer. Unlike traditional systems, we split requests into hashed parts, route them through a network of Nodes and Relays, and reassemble them securely. A lightweight crypto chain ensures trust and incentives.
