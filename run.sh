@@ -19,8 +19,8 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd):$(pwd)/src"
 
 # Read host and port from config/settings.json
 echo "Reading configuration from config/settings.json..."
-HOST=$(python -c "import json; config = json.load(open('config/settings.json')); print(config['server-settings']['host'])")
-PORT=$(python -c "import json; config = json.load(open('config/settings.json')); print(config['server-settings']['port'])")
+HOST=$(python -c "import json;import os;import io;from typing import LiteralString;exec(open('src/util/jsonreader.py').read());config_data = read_json_from_namespace('config.settings');print(config_data['server-settings']['host'])")
+PORT=$(python -c "import json;import os;import io;from typing import LiteralString;exec(open('src/util/jsonreader.py').read());config_data = read_json_from_namespace('config.settings');print(config_data['server-settings']['port'])")
 
 # Read auto-reload setting from config/dev.json
 echo "Reading auto-reload configuration from config/dev.json..."

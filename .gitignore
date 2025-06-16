@@ -18,3 +18,4 @@ testoutput
 benchmarks
 # Pre-Production files
 *.test.py
+json-loader.sh
