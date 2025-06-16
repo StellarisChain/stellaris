@@ -2,7 +2,9 @@ import miniupnpc
 import traceback
 import os
 from libp2p import IHost, new_host
+from typing import Optional
 from lib.VoxaCommunications_Router.util.net_utils import get_program_ports
+from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from util.logging import log
 from util.envutils import detect_container
 
@@ -14,6 +16,7 @@ class NetManager:
         self.libp2p_setup = False
         self.libp2phost: IHost = None
         self.is_container = detect_container()
+        self.ssu_node: SSUNode = None
     
     async def setup_libp2p(self) -> None:
         """Set up the P2P host."""
@@ -90,3 +93,12 @@ class NetManager:
                     self.logger.error(f"Failed to map port {port}: {e}")
         except Exception as e:
             self.logger.error(f"Failed to add port mappings: {e}")
+
+global_net_manager: NetManager = None
+
+def get_global_net_manager() -> NetManager:
+    return global_net_manager
+
+def set_global_net_manager(net_manager: NetManager) -> None:
+    global global_net_manager
+    global_net_manager = net_manager

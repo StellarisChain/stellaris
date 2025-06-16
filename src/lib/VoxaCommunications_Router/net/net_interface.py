@@ -8,9 +8,33 @@ logger = log()
 
 """
 The interface module to the VoxaCommunications Network.
+
+TODO: This should probably be a class that manages state and configuration for network interactions.
 """
 
 ROUTING_CHAIN_METHOD_DEFAULT: str = "threaded"
+
+# in development
+def send_request(request: Request):
+    """
+    Send a request through the VoxaCommunications Network.
+    
+    Args:
+        request (Request): The request object to be sent.
+    
+    Returns:
+        Response: The response object received from the network.
+    """
+    logger.info(f"Sending request to target: {request.target} via protocol: {request.request_protocol}")
+    
+    if not request.routing_chain:
+        request.routing_chain = generate_encrypted_routing_chain(request)
+    
+    match request.request_protocol:
+        case "tcp":
+            pass
+        case "i2p":
+            pass
 
 def generate_encrypted_routing_chain(request: Request, routing_map: Optional[RoutingMap] = None, method: Optional[str] = ROUTING_CHAIN_METHOD_DEFAULT, max_map_size: Optional[int] = 20) -> dict:
     """

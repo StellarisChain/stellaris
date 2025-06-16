@@ -27,7 +27,7 @@ from stores.registrycontroller import set_global_registry_manager
 from stores.kytancontroller import KytanController, set_kytan_controller, initialize_kytan_controller
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from lib.VoxaCommunications_Router.ri.ri_manager import RIManager
-from src.lib.VoxaCommunications_Router.net.net_manager import NetManager
+from src.lib.VoxaCommunications_Router.net.net_manager import NetManager, set_global_net_manager
 from src import __version__
 
 # Load environment variables and initialize colorama
@@ -78,6 +78,7 @@ class Main:
         """Initialize NetManager for UPnP/NPC port forwarding."""
         self.logger.info("Setting up NetManager for UPnP/NPC...")
         self.net_manager = NetManager()
+        set_global_net_manager(self.net_manager)
         self.logger.info("NetManager setup completed.")
 
     def run_features(self) -> None:
