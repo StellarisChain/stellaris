@@ -1,6 +1,7 @@
 from typing import Union, Optional
 from pydantic import BaseModel, validator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
+from lib.VoxaCommunications_Router.routing.request_data import RequestData
 
 class Request:
     """Request class for handling routing requests in VoxaCommunications-NetNode.
@@ -9,7 +10,7 @@ class Request:
     route to be processed and any associated data.
     """
 
-    def __init__(self, routing_map: RoutingMap, target: Optional[str] = None) -> None:
+    def __init__(self, routing_map: RoutingMap, target: Optional[str] = None, request_data: Optional[RequestData] = None) -> None:
         """Initialize the Request with a route.
 
         Args:
@@ -17,9 +18,37 @@ class Request:
         """
         self.routing_map: RoutingMap = routing_map  # The routing map containing the route information
         self.request_protocol: str = "ssu" # "ssu" or "i2p" # Protocol to use for the request, i2p is a fallback. Refer to validate_request_protocol
-        self.data: bytes = "placeholder".encode("utf-8") # using a placeholder right now
+        #self.data: bytes = "placeholder".encode("utf-8") # using a placeholder right now
+        self.request_data: RequestData = request_data
         self.target: str = target # Where the request is being sent, ex "example.com" or an IP address
+        if self.request_data:
+            self.request_data.target = self.target
+            self.data = self.request_data.to_bytes()
         self.routing_chain: dict = {}
+    
+    @property
+    def data(self) -> bytes:
+        """Get the request data as bytes."""
+        return self.request_data.to_bytes() if self.request_data else b""
+    
+    @data.setter
+    def data(self, request_data: Union[RequestData, bytes]) -> None:
+        self.data = request_data.to_bytes() if isinstance(request_data, RequestData) else request_data
+
+    def set_request_data(self, request_data: Union[RequestData, bytes]) -> None:
+        """Set the request data for the request.
+
+        Args:
+            request_data: The request data to be set, can be a RequestData object or bytes.
+        """
+        if isinstance(request_data, RequestData):
+            self.request_data.target = self.target
+            self.request_data = request_data
+            self.data = self.request_data.to_bytes()
+        elif isinstance(request_data, bytes):
+            self.data = request_data
+        else:
+            raise TypeError("request_data must be of type RequestData or bytes")
 
     def generate_routing_chain(self) -> dict:
         from lib.VoxaCommunications_Router.routing.routeutils import encrypt_routing_chain # Should not cause an issue with circular imports
