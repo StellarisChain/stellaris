@@ -74,18 +74,26 @@ class SSUNode:
                         case "PUNCH":
                             self.logger.info(f"Received PUNCH command with params: {ssu_control_packet.ssu_control_params}")
                             
-                            # When we get sent a punch packet, send one back to the sender, but with params
-                            response = SSUControlPacket(
-                                addr=addr,
-                                ssu_control_command="PUNCH",
-                                ssu_control_params={
-                                    "index": int(ssu_control_packet.ssu_control_params.get("index", "0")) + 1, # Increment index
-                                }
-                            )
-                            response.assemble_ssu_control()
-                            response.str_to_raw()
-                            self.sock.sendto(response.raw_data, addr)
-                            self.logger.info(f"Sent PUNCH response to {addr}")
+                            index: int = int(ssu_control_packet.ssu_control_params.get("index", "0"))
+                            max_index: int = int(self.config.get("max_ssu_loop_index"))
+
+                            # We send around 5-10 punch packets back and forth. After that, we stop.
+                            if index >= max_index:
+                                self.logger.info(f"Max PUNCH index {max_index} reached, not sending response")
+                                continue
+                            else:
+                                # When we get sent a punch packet, send one back to the sender, but with params
+                                response = SSUControlPacket(
+                                    addr=addr,
+                                    ssu_control_command="PUNCH",
+                                    ssu_control_params={
+                                        "index": int(ssu_control_packet.ssu_control_params.get("index", "0")) + 1, # Increment index
+                                    }
+                                )
+                                response.assemble_ssu_control()
+                                response.str_to_raw()
+                                self.sock.sendto(response.raw_data, addr)
+                                self.logger.info(f"Sent PUNCH response to {addr}")
                         case _:
                             self.logger.warning(f"Unknown SSU control command: {ssu_control_packet.ssu_control_command}")
 
