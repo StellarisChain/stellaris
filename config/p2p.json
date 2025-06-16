@@ -2,6 +2,7 @@
     "host": "0.0.0.0",
     "port": 9000,
     "max_peers": 100,
+    "max_ssu_loop_index": 5,
     "max_connections": 50,
     "topics": [
         "voxacomms-discovery",

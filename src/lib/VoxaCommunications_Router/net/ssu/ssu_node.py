@@ -1,22 +1,26 @@
 import asyncio
 import socket
+from typing import Optional
 from lib.VoxaCommunications_Router.net.packet import Packet
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
 from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket
 from util.logging import log
 from util.jsonutils import json_from_keys, lists_to_dict
+from util.jsonreader import read_json_from_namespace
 
 SSU_NODE_CONFIG_KEYS: list[str] = [
     "host",
-    "port"
+    "port",
+    "max_ssu_loop_index"
 ]
 SSU_NODE_CONFIG_DEFAULT_VALUES: list[str] = [
     "0.0.0.0",
-    9999
+    9999,
+    5
 ]
 
 class SSUNode:
-    def __init__(self, config: dict):
+    def __init__(self, config: Optional[dict] = read_json_from_namespace("config.p2p")):
         self.config: dict = json_from_keys(SSU_NODE_CONFIG_KEYS, config) or lists_to_dict(SSU_NODE_CONFIG_KEYS, SSU_NODE_CONFIG_DEFAULT_VALUES)
         self.logger = log()
         self.sock: socket.socket = None
@@ -58,6 +62,8 @@ class SSUNode:
                 packet: Packet | SSUPacket | SSUControlPacket = SSUPacket(raw_data=raw_data, addr=addr) # We are in ssu_node, of course it's an SSUPacket
                 packet.raw_to_str()
                 ssu_control_packet: SSUControlPacket = packet.upgrade_to_ssu_control_packet() # See if we can upgrade to SSUControlPacket
+                
+                # If it is a control packet, handle it
                 if ssu_control_packet:
                     ssu_control_packet.parse_ssu_control()
                     self.logger.info(f"Received SSU Control Packet")
@@ -67,11 +73,16 @@ class SSUNode:
                             pass
                         case "PUNCH":
                             self.logger.info(f"Received PUNCH command with params: {ssu_control_packet.ssu_control_params}")
+                            
+                            # When we get sent a punch packet, send one back to the sender, but with params
                             response = SSUControlPacket(
-                                str_data='SSU_CONTROL PUNCH',
-                                addr=addr
+                                addr=addr,
+                                ssu_control_command="PUNCH",
+                                ssu_control_params={
+                                    "index": int(ssu_control_packet.ssu_control_params.get("index", "0")) + 1, # Increment index
+                                }
                             )
-                            response.parse_ssu_control()
+                            response.assemble_ssu_control()
                             response.str_to_raw()
                             self.sock.sendto(response.raw_data, addr)
                             self.logger.info(f"Sent PUNCH response to {addr}")

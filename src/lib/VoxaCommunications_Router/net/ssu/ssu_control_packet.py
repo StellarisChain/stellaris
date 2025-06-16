@@ -14,6 +14,31 @@ class SSUControlPacket(SSUPacket):
     ssu_control_command: Optional[str] = "unknown" # Options: "STATUS", "PUNCH", etc.
     ssu_control_params: Optional[dict] = None
 
+    def assemble_ssu_control(self):
+        """
+        Assemble the SSU control command and parameters into the str_data.
+
+        The str_data will be in the format:
+        "SSU_CONTROL COMMAND PARAMS"
+        where PARAMS are optional and are comma-separated key=value pairs.
+
+        Example:
+            ssu_control_command = "RESTART"
+            ssu_control_params = {"delay": "5", "force": "true"}
+            This will set:
+                str_data = "SSU_CONTROL RESTART delay=5,force=true"
+        """
+        if not self.ssu_control_command:
+            return
+        
+        parts: list[str] = [SSU_CONTROL_HEADER, self.ssu_control_command]
+        
+        if self.ssu_control_params:
+            params_str = ','.join(f"{key}={value}" for key, value in self.ssu_control_params.items())
+            parts.append(params_str)
+        
+        self.str_data = ' '.join(parts)
+
     def parse_ssu_control(self):
         """
         Parse the SSU control command and parameters from the str_data.
