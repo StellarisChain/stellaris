@@ -23,6 +23,7 @@ class RIManager:
         self._initialized: bool = False
         self.storage_config: dict = read_json_from_namespace("config.storage") or {}
         self.settings = read_json_from_namespace("config.settings") or {}
+        self.features: dict = self.settings.get("features", {})
         self.p2p_settings = read_json_from_namespace("config.p2p") or {}
         self.data_dir: str = self.storage_config.get("data-dir", "data/")
         self.sub_dirs: dict = dict(self.storage_config.get("sub-dirs", {}))
@@ -75,6 +76,14 @@ class RIManager:
         else:
             raise ValueError(f"Unknown RI type: {self.type}")
         self._initialized = True
+    
+    def _features_to_list(self) -> list[str]:
+        features_list: list[str] = []
+        for feature, enabled in self.features.items():
+            if enabled:
+                feature: str = feature.replace("enable-", "")
+                features_list.append(feature)
+        return features_list
 
     def initialize_node(self):
         self.registry_manager.client.register_node(
@@ -85,12 +94,13 @@ class RIManager:
         key_manager = KeyManager(mode="node")
         rsa_keys = key_manager.generate_hybrid_keys().get("rsa")
         rsa_key_generator: RSAKeyGenerator = key_manager.hybrid_key_generator.rsa_generator
+        capabilities: list[str] = self._features_to_list()
         nri_data: dict = NRISchema(
             node_id=node_id,
             node_ip=self.registry_manager.client.node_ip,
             node_port=self.p2p_settings.get("port", 9000),  # 9000 should be standard for nodes
             node_type=self.settings.get('node-network-level', 'mainnet'),
-            capabilities=["routing", "forwarding"],
+            capabilities=capabilities,
             metadata={"location": "datacenter-1"},
             public_key=rsa_keys["public_key"],
             public_key_hash=str(rsa_key_generator.public_key_hash)

@@ -1,6 +1,7 @@
 {
     "node-network-level": "testnet",
     "node-autoupdate-config": true,
+    // server-settings dosent matter too much, as ssu will have an adapter/translator that allows p2p requests to access this internal api
     "server-settings": {
         "host": "0.0.0.0",
         "port": 9999
