@@ -1,6 +1,7 @@
 import asyncio
 import socket
 from lib.VoxaCommunications_Router.net.packet import Packet
+from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
 from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket
 from util.logging import log
 from util.jsonutils import json_from_keys, lists_to_dict
@@ -54,7 +55,7 @@ class SSUNode:
             try:
                 raw_data, addr = await self.loop.run_in_executor(None, self.sock.recvfrom, 4096)
                 self.logger.info(f"Received {len(raw_data)} bytes from {addr}")
-                packet: Packet | SSUControlPacket = Packet(raw_data=raw_data, addr=addr)
+                packet: Packet | SSUPacket | SSUControlPacket = SSUPacket(raw_data=raw_data, addr=addr) # We are in ssu_node, of course it's an SSUPacket
                 packet.raw_to_str()
                 ssu_control_packet: SSUControlPacket = packet.upgrade_to_ssu_control_packet() # See if we can upgrade to SSUControlPacket
                 if ssu_control_packet:

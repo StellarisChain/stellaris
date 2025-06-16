@@ -1,9 +1,10 @@
 from typing import Optional
+from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
 from lib.VoxaCommunications_Router.net.packet import Packet
 
 SSU_CONTROL_HEADER: str = "SSU_CONTROL"
 
-class SSUControlPacket(Packet):
+class SSUControlPacket(SSUPacket):
     """
     Represents an SSU control request packet.
 
