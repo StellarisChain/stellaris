@@ -7,6 +7,7 @@ from lib.VoxaCommunications_Router.registry.registry_manager import RegistryMana
 from lib.VoxaCommunications_Router.registry.client import RegistryClient
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.cryptography.keymanager import KeyManager
+from lib.VoxaCommunications_Router.net.net_manager import NetManager, get_global_net_manager
 from lib.VoxaCommunications_Router.util.ri_utils import fetch_ri, save_ri
 from lib.compression import JSONCompressor
 from stores.registrycontroller import get_global_registry_manager, set_global_registry_manager
@@ -95,6 +96,8 @@ class RIManager:
         rsa_keys = key_manager.generate_hybrid_keys().get("rsa")
         rsa_key_generator: RSAKeyGenerator = key_manager.hybrid_key_generator.rsa_generator
         capabilities: list[str] = self._features_to_list()
+        net_manager: NetManager = get_global_net_manager()
+        self.registry_manager.client.node_ip = net_manager.ip_info[1] # Extract the public IP from the net manager
         nri_data: dict = NRISchema(
             node_id=node_id,
             node_ip=self.registry_manager.client.node_ip,
