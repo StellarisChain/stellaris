@@ -3,6 +3,7 @@
     "sub-dirs": {
         "nri": "nri/",
         "rri": "rri/",
-        "local": "local/"
+        "local": "local/",
+        "dns": "dns/"
     }
 }
