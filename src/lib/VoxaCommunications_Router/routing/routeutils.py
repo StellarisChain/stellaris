@@ -1,7 +1,7 @@
 import json
 import base64
 import threading
-from typing import Optional
+from typing import Optional, Any, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from copy import deepcopy
@@ -385,3 +385,30 @@ def encrypt_routing_chain_sequential_batched(request: Request = None, batch_size
 
     logger.info(f"Sequential batched routing encryption completed")
     return new_routing_map.routes
+
+def routing_chain_next_block(routing_chain: Union[dict, str]) -> Any:
+    """Get the next block in the routing chain.
+
+    Args:
+        routing_chain (dict, str): The routing chain to process.
+
+    Returns:
+        Any: The next block in the routing chain.
+    """
+    if isinstance(routing_chain, str):
+        try:
+            routing_chain = json.loads(routing_chain)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode routing chain as JSON: {str(e)}")
+            return None
+
+    if not isinstance(routing_chain, dict):
+        logger.error("Routing chain is not a valid dictionary.")
+        return None
+
+    # Check for the next block
+    next_block = routing_chain.get("child_route")
+    if not next_block:
+        return None
+
+    return next_block

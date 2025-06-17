@@ -2,6 +2,8 @@ from typing import Union, Optional
 from pydantic import BaseModel, validator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request_data import RequestData
+from lib.VoxaCommunications_Router.routing.routeutils import routing_chain_next_block
+from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
 
 class Request:
     """Request class for handling routing requests in VoxaCommunications-NetNode.
@@ -35,6 +37,22 @@ class Request:
     def bytes_data(self, request_data: Union[RequestData, bytes]) -> None:
         self.data = request_data.to_bytes() if isinstance(request_data, RequestData) else request_data
 
+    def to_ssu_packet(self) -> SSUPacket:
+        """Convert the request to an SSU packet.
+
+        Returns:
+            SSUPacket: The SSU packet representation of the request.
+        """
+        if not self.request_data:
+            raise ValueError("Request data is not set.")
+        ssu_packet = SSUPacket()
+        next_blocks: Union[str, bytes, dict] = routing_chain_next_block(self.routing_chain)
+        ssu_packet.str_data = next_blocks
+        ssu_packet.addr = self.routing_chain.get("relay_ip")
+        ssu_packet.str_to_raw()
+
+        return ssu_packet
+    
     def set_request_data(self, request_data: Union[RequestData, bytes]) -> None:
         """Set the request data for the request.
 

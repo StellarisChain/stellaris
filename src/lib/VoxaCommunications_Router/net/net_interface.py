@@ -2,11 +2,12 @@ from typing import Optional, Union
 from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.net.net_manager import NetManager, get_global_net_manager
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
+from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.request_data import RequestData
 from lib.VoxaCommunications_Router.routing.typing import RequestContentsHTTP, RequestContentsTCP
-from lib.VoxaCommunications_Router.routing.routeutils import encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched
+from lib.VoxaCommunications_Router.routing.routeutils import encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched, routing_chain_next_block
 from util.logging import log
 from util.jsonutils import base_model_from_keys
 
@@ -62,6 +63,7 @@ def send_request(request: Request):
             ssu_node: SSUNode = net_manager.ssu_node
             if not ssu_node or not ssu_node.running:
                 raise RuntimeError("SSU Node is not running. Cannot send SSU request.")
+            ssu_packet: SSUPacket = request.to_ssu_packet()
             pass
         case "i2p":
             pass
