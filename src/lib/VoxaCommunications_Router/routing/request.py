@@ -27,12 +27,12 @@ class Request:
         self.routing_chain: dict = {}
     
     @property
-    def data(self) -> bytes:
+    def bytes_data(self) -> bytes:
         """Get the request data as bytes."""
         return self.request_data.to_bytes() if self.request_data else b""
     
-    @data.setter
-    def data(self, request_data: Union[RequestData, bytes]) -> None:
+    @bytes_data.setter
+    def bytes_data(self, request_data: Union[RequestData, bytes]) -> None:
         self.data = request_data.to_bytes() if isinstance(request_data, RequestData) else request_data
 
     def set_request_data(self, request_data: Union[RequestData, bytes]) -> None:

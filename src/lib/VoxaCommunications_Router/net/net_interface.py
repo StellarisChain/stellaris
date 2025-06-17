@@ -33,7 +33,10 @@ def request_factory(target: str, request_protocol: str = "http", contents_kwargs
         request_protocol=request_protocol,
         request_contents=request_contents
     )
-    request: Request = Request(request_data=request_data)
+    relay_map: RoutingMap = generate_relay_map(max_map_size=20)  # Default relay map generation
+    request: Request = Request(request_data=request_data, routing_map=relay_map)
+    
+    return request
 
 # in development
 def send_request(request: Request):
@@ -78,7 +81,7 @@ def generate_encrypted_routing_chain(request: Request, routing_map: Optional[Rou
         request.routing_map = routing_map
     elif not request.routing_map:
         # If no routing map is provided, and the request has no routing map, generate a default one
-        request.routing_map = generate_relay_map(max_size=max_map_size)
+        request.routing_map = generate_relay_map(max_map_size=max_map_size)
     routing_chain: dict = {}
     match method:
         case "default":
