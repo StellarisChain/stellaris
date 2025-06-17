@@ -1,11 +1,14 @@
-from typing import Optional
+from typing import Optional, Union
 from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.net.net_manager import NetManager, get_global_net_manager
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
+from lib.VoxaCommunications_Router.routing.request_data import RequestData
+from lib.VoxaCommunications_Router.routing.typing import RequestContentsHTTP, RequestContentsTCP
 from lib.VoxaCommunications_Router.routing.routeutils import encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched
 from util.logging import log
+from util.jsonutils import base_model_from_keys
 logger = log()
 
 """
@@ -16,6 +19,22 @@ TODO: This should probably be a class that manages state and configuration for n
 
 ROUTING_CHAIN_METHOD_DEFAULT: str = "threaded"
 
+def request_factory(target: str, request_protocol: str = "http", contents_kwargs: dict = {}) -> Request:
+    request_contents: Union[RequestContentsHTTP, RequestContentsTCP] = None
+    match request_protocol:
+        case "http":
+            request_contents = base_model_from_keys(RequestContentsHTTP, contents_kwargs)[0]
+        case "tcp":
+            request_contents = base_model_from_keys(RequestContentsTCP, contents_kwargs)[0]
+        case _:
+            raise ValueError(f"Unknown request protocol: {request_protocol}. Supported protocols are 'http' and 'tcp'.")
+    request_data: RequestData = RequestData(
+        target=target,
+        request_protocol=request_protocol,
+        request_contents=request_contents
+    )
+    request: Request = Request(request_data=request_data)
+    
 # in development
 def send_request(request: Request):
     """

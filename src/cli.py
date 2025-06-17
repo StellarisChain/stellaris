@@ -16,6 +16,7 @@ from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched, decrypt_routing_chain_block_previous, decrypt_routing_chain_block
+from lib.VoxaCommunications_Router.net.net_interface import send_request
 from schema.RRISchema import RRISchema
 from util.filereader import save_key_file, read_key_file
 from util.jsonreader import read_json_from_namespace
