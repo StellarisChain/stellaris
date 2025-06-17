@@ -77,3 +77,12 @@ class Request:
         if v not in allowed_protocols:
             raise ValueError("request_protocol must be 'ssu' or 'i2p'")
         return v
+    
+    def to_dict(self) -> dict:
+        """Convert the Request object to a dictionary representation."""
+        return {
+            "request_protocol": self.request_protocol,
+            "data": self.data.decode("utf-8") if self.data else None,
+            "target": self.target,
+            "routing_chain": self.routing_chain
+        }

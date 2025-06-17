@@ -304,7 +304,7 @@ if __name__ == "__main__":
     elif args.command == 'app':
         if args.app_command == 'run':
             print(f"Starting application server on {args.host}:{args.port}")
-            config: dict = read_json_from_namespace("config.settings") if args.use_config else {
+            config: dict = read_json_from_namespace("config.settings")["server-settings"] if args.use_config else {
                 "host": args.host,
                 "port": args.port,
                 "reload": args.reload
