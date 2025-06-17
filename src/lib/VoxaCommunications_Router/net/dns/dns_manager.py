@@ -6,6 +6,7 @@ from schema.dns.dns_record import DNSRecord
 from schema.dns.a_record import ARecord
 from lib.VoxaCommunications_Router.net.dns import dns_utils
 
+# DNSManager, should be spawned from NetManager
 class DNSManager:
     def __init__(self):
         self.logger = log()
@@ -369,3 +370,25 @@ class DNSManager:
         except Exception as e:
             self.logger.error(f"Error getting DNS manager stats: {e}")
             return {"error": str(e)}
+        
+global_dns_manager: DNSManager = None
+
+def get_global_dns_manager() -> DNSManager:
+    """
+    Get the global DNSManager instance.
+    
+    Returns:
+        DNSManager: The global DNSManager instance.
+    """
+    return global_dns_manager
+
+def set_global_dns_manager(manager: DNSManager) -> None:
+    """
+    Set the global DNSManager instance.
+    
+    Args:
+        manager: The DNSManager instance to set as global.
+    """
+    global global_dns_manager
+    global_dns_manager = manager
+    global_dns_manager.logger.info("Global DNSManager instance set")

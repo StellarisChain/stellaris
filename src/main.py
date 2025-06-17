@@ -27,7 +27,7 @@ from stores.registrycontroller import set_global_registry_manager
 from stores.kytancontroller import KytanController, set_kytan_controller, initialize_kytan_controller
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from lib.VoxaCommunications_Router.ri.ri_manager import RIManager
-from src.lib.VoxaCommunications_Router.net.net_manager import NetManager, set_global_net_manager
+from lib.VoxaCommunications_Router.net.net_manager import NetManager, set_global_net_manager
 from src import __version__
 
 # Load environment variables and initialize colorama
@@ -99,6 +99,8 @@ class Main:
         self.logger.info("Setting up NetManager for UPnP/NPC...")
         self.net_manager = NetManager()
         self.net_manager.setup_ssu_node() # Setup SSU Node
+        if self.features.get("enable-dns", True):
+            self.net_manager.setup_dns_manager()
         set_global_net_manager(self.net_manager)
         self.logger.info("NetManager setup completed.")
 
@@ -113,7 +115,6 @@ class Main:
             # TODO (In Progress): Create a new module "net" in voxacommunications-router for port forwarding, p2p, hole punching, and RTC
             self.net_manager.setup_upnp()
             self.net_manager.add_port_mappings()
-            pass
 
     def _load_configuration(self) -> None:
         """Load and validate application configuration."""

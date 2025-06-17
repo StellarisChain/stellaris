@@ -8,6 +8,7 @@ from libp2p import IHost, new_host
 from typing import Optional, Any
 from lib.VoxaCommunications_Router.util.net_utils import get_program_ports
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
+from lib.VoxaCommunications_Router.net.dns.dns_manager import DNSManager, set_global_dns_manager
 from util.logging import log
 from util.envutils import detect_container
 from util.jsonreader import read_json_from_namespace
@@ -21,6 +22,7 @@ class NetManager:
         self.libp2phost: IHost = None
         self.is_container = detect_container()
         self.ssu_node: SSUNode = None
+        self.dns_manager: DNSManager = None
         self.p2p_config: dict = read_json_from_namespace("config.p2p") or {}
         self.settings: dict = read_json_from_namespace("config.settings") or {}
         self.features: dict = self.settings.get("features", {})
@@ -122,6 +124,12 @@ class NetManager:
         
         self.loop.create_task(self.ssu_node.serve())
         self.logger.info("SSU Node server started")
+
+    def setup_dns_manager(self) -> None:
+        """Initialize the DNS manager."""
+        self.logger.info("Setting up DNS Manager")
+        self.dns_manager = DNSManager()
+        set_global_dns_manager(self.dns_manager)
 
 global_net_manager: NetManager = None
 

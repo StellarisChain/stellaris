@@ -18,6 +18,7 @@
         "enable-multi-signature": false,
         "enable-kytan-vpn": true,
         "enable-upnpc-port-forwarding": true,
-        "enable-ssu": true
+        "enable-ssu": true,
+        "enable-dns": true
     }
 }
