@@ -87,17 +87,17 @@ class RIManager:
         return features_list
 
     def initialize_node(self):
+        net_manager: NetManager = get_global_net_manager()
         self.registry_manager.client.register_node(
             callsign=f"{self.settings.get('node-network-level', 'mainnet')}-{str(uuid.uuid4())}",
-            node_type=self.settings.get('node-network-level', 'mainnet')  # idk why this even exists as we know this is a node
+            node_type=self.settings.get('node-network-level', 'mainnet'),  # idk why this even exists as we know this is a node
+            node_ip=net_manager.ip_info[1]
         )
         node_id = self.registry_manager.client.ids.get("node_id")
         key_manager = KeyManager(mode="node")
         rsa_keys = key_manager.generate_hybrid_keys().get("rsa")
         rsa_key_generator: RSAKeyGenerator = key_manager.hybrid_key_generator.rsa_generator
         capabilities: list[str] = self._features_to_list()
-        net_manager: NetManager = get_global_net_manager()
-        self.registry_manager.client.node_ip = net_manager.ip_info[1] # Extract the public IP from the net manager
         nri_data: dict = NRISchema(
             node_id=node_id,
             node_ip=self.registry_manager.client.node_ip,
