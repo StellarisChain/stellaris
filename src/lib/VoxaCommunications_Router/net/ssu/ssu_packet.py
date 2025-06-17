@@ -1,6 +1,8 @@
 from typing import Optional
 from lib.VoxaCommunications_Router.net.packet import Packet
 
+SSU_PACKET_HEADER: str = "SSU_PACKET"
+
 class SSUPacket(Packet):
     ssu_control_packet: Optional[None] = None
     

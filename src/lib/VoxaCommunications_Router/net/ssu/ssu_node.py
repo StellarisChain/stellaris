@@ -1,15 +1,20 @@
 import asyncio
 import socket
-from typing import Optional
+from typing import Optional, Union
 from copy import deepcopy
 from lib.VoxaCommunications_Router.net.packet import Packet
-from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
+from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket, SSU_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
-from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket
+from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket, SSU_CONTROL_HEADER
 from util.logging import log
 from util.jsonutils import json_from_keys, lists_to_dict
 from util.jsonreader import read_json_from_namespace
 from util.wrappers import deprecated
+
+PACKET_HEADERS: dict[str, Union[Packet, SSUPacket, SSUControlPacket]] = {
+    SSU_CONTROL_HEADER: SSUControlPacket,
+    SSU_PACKET_HEADER: SSUPacket
+}
 
 # Configuration keys for SSU Node settings
 SSU_NODE_CONFIG_KEYS: list[str] = [
@@ -26,6 +31,20 @@ SSU_NODE_CONFIG_DEFAULT_VALUES: list[str] = [
     5,
     10
 ]
+
+def attempt_upgrade(packet: Packet) -> Union[Packet, SSUPacket, SSUControlPacket]:
+    """
+    Attempt to upgrade a Packet to a more specific type based on its header.
+    This function checks the packet's header and returns an instance of the
+    appropriate packet type (Packet, SSUPacket, or SSUControlPacket).
+    Args:
+        packet (Packet): The packet to upgrade
+    Returns:
+        Union[Packet, SSUPacket, SSUControlPacket]: The upgraded packet instance
+    """
+    header: str = packet.get_header()
+    packet_type: Union[Packet, SSUPacket, SSUControlPacket] = PACKET_HEADERS.get(header, Packet)
+    return packet_type(**packet.dict())
 
 class SSUNode:
     """
@@ -70,8 +89,11 @@ class SSUNode:
         
         # Peer management
         self.peers: list = []  # List of all peer connections
+
+        # Request / Response management
         self.request_pool: dict[str, SSURequest] = {}  # Active requests by ID
         self.request_returns: dict[str, SSURequest] = {}  # Completed requests by ID
+        self.packet_hooks: dict[str, callable] = {}  # Hooks for packet processing [packet_header]
         
         # Ensure port is an integer
         if isinstance(self.port, str):
@@ -191,9 +213,32 @@ class SSUNode:
                             del self.request_pool[request_id]
                             break
 
+                    for header, hook in self.packet_hooks.items():
+                        if packet.get_header() == header:
+                            try:
+                                packet: Union[Packet, SSUPacket, SSUControlPacket] = attempt_upgrade(packet)
+                                self.logger.info(f"Executing packet hook for header {header}")
+                                self.loop.create_task(hook(packet))
+                            except Exception as e:
+                                self.logger.error(f"Error executing packet hook for {header}: {e}")
+
             except Exception as e:
                 self.logger.error(f"Error receiving data: {e}")
                 await asyncio.sleep(1)  # Brief pause before retrying
+    
+    def bind_hook(self, packet_header: str, hook: callable):
+        """
+        Bind a custom processing hook to a specific packet header.
+        
+        Args:
+            packet_header (str): The header to bind the hook to
+            hook (callable): The function to call when a packet with this header is received
+        """
+        if not callable(hook):
+            raise ValueError("Hook must be a callable function")
+        
+        self.packet_hooks[packet_header] = hook
+        self.logger.info(f"Hook bound for packet header: {packet_header}")
 
     @deprecated("Use send_ssu_request instead")
     async def send_packet(self, packet: Packet | SSUPacket | SSUControlPacket):
