@@ -1,4 +1,5 @@
-# Generates some testing data
+# CLI Testing module
+
 import uuid
 import random
 import argparse
@@ -267,10 +268,10 @@ if __name__ == "__main__":
 
     """
         Example usage: 
-        python src/data_tests.py rri map --benchmark --method threaded --mapsize 25 --testdecrypt
-        python src/data_tests.py rri map --method default --mapsize 6 --testdecrypt
-        python src/data_tests.py rri generate --count 20
-        python src/data_tests.py rri decrypt  # Uses last generated map
+        python src/cli.py rri map --benchmark --method threaded --mapsize 25 --testdecrypt
+        python src/cli.py rri map --method default --mapsize 6 --testdecrypt
+        python src/cli.py rri generate --count 20
+        python src/cli.py rri decrypt
     """
     
     if args.command == 'rri':
