@@ -3,6 +3,7 @@ from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.net.net_manager import NetManager, get_global_net_manager
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
+from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.request_data import RequestData
@@ -38,11 +39,10 @@ def request_factory(target: str, request_protocol: str = "http", contents_kwargs
     relay_map: RoutingMap = generate_relay_map(max_map_size=20)  # Default relay map generation
     request: Request = Request(request_data=request_data, routing_map=relay_map)
     request.generate_routing_chain()
-    
     return request
 
 # in development
-def send_request(request: Request):
+async def send_request(request: Request, timeout: Optional[int] = 30):
     """
     Send a request through the VoxaCommunications Network.
     
@@ -64,6 +64,8 @@ def send_request(request: Request):
             if not ssu_node or not ssu_node.running:
                 raise RuntimeError("SSU Node is not running. Cannot send SSU request.")
             ssu_packet: SSUPacket = request.to_ssu_packet()
+            ssu_request: SSURequest = ssu_packet.upgrade_to_ssu_request(generate_request_id=True)
+            response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=timeout)
             pass
         case "i2p":
             pass

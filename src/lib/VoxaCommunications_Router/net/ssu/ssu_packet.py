@@ -12,3 +12,11 @@ class SSUPacket(Packet):
             return None
         self.ssu_control_packet = SSUControlPacket(**self.dict())
         return self.ssu_control_packet
+    
+    def upgrade_to_ssu_request(self, generate_request_id: Optional[bool] = True):
+        from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
+        ssu_request = SSURequest(payload=self)
+        ssu_request.addr = (self.addr, 9000) # TODO: Fix this hardcoded port
+        if generate_request_id:
+            ssu_request.generate_request_id()
+        return ssu_request
