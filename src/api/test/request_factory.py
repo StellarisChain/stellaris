@@ -1,3 +1,4 @@
+import traceback
 from fastapi import Request as FastAPIRequest, HTTPException
 from typing import Any, Optional
 from lib.VoxaCommunications_Router.net.net_interface import request_factory
@@ -8,6 +9,18 @@ from util.logging import log
 logger = log()
 
 ENABLE_RESPONSE_MODEL = False # It complains otherwise, used by routes.py
+
+# EXAMPLE REQUEST
+"""
+{
+  "target": "example.com",
+  "request_protocol": "http",
+  "contents_kwargs": {
+    "method": "GET",
+    "follow_redirects": false
+  }
+}
+"""
 
 # test the request factory
 def handler(request: FastAPIRequest, request_factory_schema: RequestFactorySchema) -> dict[str, Any]:
@@ -31,4 +44,6 @@ def handler(request: FastAPIRequest, request_factory_schema: RequestFactorySchem
         return {"status": "success", "request": request_obj.to_dict()}
     
     except Exception as e:
+        logger.error(f"Error processing request factory: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

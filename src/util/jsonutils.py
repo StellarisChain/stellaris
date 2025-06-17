@@ -5,10 +5,20 @@ from _collections_abc import dict_keys
 from pydantic import BaseModel
 
 def base_model_from_keys(model: BaseModel, kwargs: dict) -> tuple[BaseModel, dict]:
-    base_model_dict: Dict[str, Any] = model.dict()
-    base_model_keys: dict_keys[str, Any] = base_model_dict.keys()
-    kwargs = json_from_keys(base_model_keys, kwargs)
-    return BaseModel(**kwargs), kwargs
+    # If model is a class, create a temporary instance to get field names
+    if isinstance(model, type) and issubclass(model, BaseModel):
+        # Create temporary instance with defaults to get field names
+        temp_instance = model()
+        base_model_dict: Dict[str, Any] = temp_instance.dict()
+        base_model_keys: dict_keys[str, Any] = base_model_dict.keys()
+        kwargs = json_from_keys(base_model_keys, kwargs)
+        return model(**kwargs), kwargs
+    else:
+        # If it's already an instance
+        base_model_dict: Dict[str, Any] = model.dict()
+        base_model_keys: dict_keys[str, Any] = base_model_dict.keys()
+        kwargs = json_from_keys(base_model_keys, kwargs)
+        return type(model)(**kwargs), kwargs
 
 def json_from_keys(keys: list, jsonData: dict) -> dict:
     """

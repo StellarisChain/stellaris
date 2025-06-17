@@ -23,9 +23,9 @@ def request_factory(target: str, request_protocol: str = "http", contents_kwargs
     request_contents: Union[RequestContentsHTTP, RequestContentsTCP] = None
     match request_protocol:
         case "http":
-            request_contents = base_model_from_keys(RequestContentsHTTP, contents_kwargs)[0]
+            request_contents = base_model_from_keys(RequestContentsHTTP(), contents_kwargs)[0]
         case "tcp":
-            request_contents = base_model_from_keys(RequestContentsTCP, contents_kwargs)[0]
+            request_contents = base_model_from_keys(RequestContentsTCP(), contents_kwargs)[0]
         case _:
             raise ValueError(f"Unknown request protocol: {request_protocol}. Supported protocols are 'http' and 'tcp'.")
     request_data: RequestData = RequestData(
@@ -34,7 +34,7 @@ def request_factory(target: str, request_protocol: str = "http", contents_kwargs
         request_contents=request_contents
     )
     request: Request = Request(request_data=request_data)
-    
+
 # in development
 def send_request(request: Request):
     """
