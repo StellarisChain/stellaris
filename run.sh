@@ -41,3 +41,11 @@ $UVICORN_CMD
 
 # Deactivate the virtual environment when the server stops
 deactivate
+
+# Delete the ./struct folder, if ran in sudo, non-sudo runs will not be able to access it
+if [ -d "./struct" ]; then
+    echo "Deleting ./struct folder..."
+    rm -rf ./struct
+else
+    echo "./struct folder does not exist, skipping deletion."
+fi

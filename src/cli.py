@@ -288,7 +288,7 @@ if __name__ == "__main__":
         python src/cli.py rri map --method default --mapsize 6 --testdecrypt
         python src/cli.py rri generate --count 20
         python src/cli.py rri decrypt
-        python src/cli.py app run --host 0.0.0.0 --port 8080 --reload
+        python src/cli.py app run --use-config
     """
     
     if args.command == 'rri':

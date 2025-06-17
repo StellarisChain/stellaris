@@ -26,19 +26,6 @@ class RequestContentsHTTP(BaseModel):
         if v_upper not in allowed_methods:
             raise ValueError(f"Method must be one of: {', '.join(allowed_methods)}")
         return v_upper
-
-    @validator('protocol')
-    def validate_protocol(cls, v: str) -> str:
-        allowed_protocols: list[str] = ["http", "https", "tcp", "udp"]
-        if v not in allowed_protocols:
-            raise ValueError(f"Protocol must be one of: {', '.join(allowed_protocols)}")
-        return v
-    
-    @validator('url')
-    def validate_url(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("URL cannot be empty")
-        return v.strip()
     
     @validator('timeout')
     def validate_timeout(cls, v: Optional[float]) -> Optional[float]:
