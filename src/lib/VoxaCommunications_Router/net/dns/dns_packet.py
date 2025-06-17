@@ -1,6 +1,7 @@
 import json
 from typing import Any, Optional, Union
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
+from util.jsonutils import base_model_from_keys
 from schema.dns.a_record import ARecord
 from schema.dns.dns_record import DNSRecord
 
@@ -22,7 +23,7 @@ class DNSPacket(SSUPacket):
         
         match self.dns_dict.get("record_type"):
             case "A":
-                return ARecord(**self.dns_dict)
+                return ARecord(**base_model_from_keys(ARecord, self.dns_dict)[1])
             case _:
                 return DNSRecord(**self.dns_dict)
     

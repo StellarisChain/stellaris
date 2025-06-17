@@ -1,5 +1,14 @@
 import json
 import base64
+from typing import Dict, Any, Union
+from _collections_abc import dict_keys
+from pydantic import BaseModel
+
+def base_model_from_keys(model: BaseModel, kwargs: dict) -> tuple[BaseModel, dict]:
+    base_model_dict: Dict[str, Any] = model.dict()
+    base_model_keys: dict_keys[str, Any] = base_model_dict.keys()
+    kwargs = json_from_keys(base_model_keys, kwargs)
+    return BaseModel(**kwargs), kwargs
 
 def json_from_keys(keys: list, jsonData: dict) -> dict:
     """
