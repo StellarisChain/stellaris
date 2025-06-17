@@ -1,4 +1,5 @@
-from fastapi import Request, HTTPException
+from fastapi import Request as FastAPIRequest, HTTPException
+from typing import Any, Optional
 from lib.VoxaCommunications_Router.net.net_interface import request_factory
 from lib.VoxaCommunications_Router.routing.request import Request
 from schema.test.request_factory_schema import RequestFactorySchema
@@ -6,8 +7,10 @@ from util.logging import log
 
 logger = log()
 
+ENABLE_RESPONSE_MODEL = False # It complains otherwise, used by routes.py
+
 # test the request factory
-def handler(request: Request, request_factory_schema: RequestFactorySchema):
+def handler(request: FastAPIRequest, request_factory_schema: RequestFactorySchema) -> dict[str, Any]:
     """
     Handle a request to create a new request object using the request factory.
     

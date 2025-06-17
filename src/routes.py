@@ -2,6 +2,7 @@ from typing import Optional, Dict, List
 import os
 import importlib
 import inspect
+import traceback
 from fastapi import WebSocket, APIRouter, FastAPI, Response
 #from lib.dynamiclibrary.loader import DynamicLibraryLoader
 #from lib.dynamiclibrary.structs import DynamicLibrary
@@ -74,6 +75,12 @@ class InternalRouter:
                             handler_func = getattr(module, 'handler')
                             endpoint_path = f"/{module_name}/"
                             
+                            # Check if response model should be disabled
+                            response_model = True
+                            if hasattr(module, 'ENABLE_RESPONSE_MODEL') and getattr(module, 'ENABLE_RESPONSE_MODEL') is False:
+                                response_model = False
+                                self.logger.info(f"Response model disabled for {full_module_path}")
+                            
                             # Determine HTTP method based on module name
                             if module_name.startswith('add_'):
                                 # POST method for add operations
@@ -85,10 +92,14 @@ class InternalRouter:
                                 self.logger.info(f"Registered GET endpoint {endpoint_path} for {full_module_path}")
                             else:
                                 # Default to GET for other endpoints
-                                sub_router.add_api_route(endpoint_path, handler_func, methods=["GET"])
+                                if response_model:
+                                    sub_router.add_api_route(endpoint_path, handler_func, methods=["GET"])
+                                else:
+                                    sub_router.add_api_route(endpoint_path, handler_func, methods=["GET"], response_model=None)
                                 self.logger.info(f"Registered GET endpoint {endpoint_path} for {full_module_path}")
                         else:
                             self.logger.warning(f"No handler function found in {full_module_path}")
                             
                     except Exception as e:
                         self.logger.error(f"Error loading module {full_module_path}: {str(e)}")
+                        traceback.print_exc()

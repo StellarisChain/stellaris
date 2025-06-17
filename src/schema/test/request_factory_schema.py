@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 
 # For /test/request_factory/
 class RequestFactorySchema(BaseModel):
@@ -6,9 +6,10 @@ class RequestFactorySchema(BaseModel):
     request_protocol: str
     contents_kwargs: dict
 
-    @validator('request_protocol')
-    def validate_protocol(self):
-        allowed_protocols = ["http", "tcp"]
-        if self.request_protocol not in allowed_protocols:
-            raise ValueError(f"Invalid request protocol: {self.request_protocol}. Allowed protocols are {allowed_protocols}.")
-        return self.request_protocol
+    @field_validator('request_protocol')
+    @classmethod
+    def validate_protocol(cls, v):
+        allowed_protocols: list[str] = ["http", "tcp"]
+        if v not in allowed_protocols:
+            raise ValueError(f"Invalid request protocol: {v}. Allowed protocols are {allowed_protocols}.")
+        return v
