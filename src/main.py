@@ -236,7 +236,6 @@ class Main:
                 self.kytan_controller.serve()
             except Exception as e:
                 self.logger.error(f"Failed to start Kytan server: {e}")
-                raise
         
         try:
             # Create and start the server thread
@@ -250,7 +249,6 @@ class Main:
             
         except Exception as e:
             self.logger.error(f"Failed to start Kytan server thread: {e}")
-            raise
 
     def shutdown(self) -> None:
         """Shutdown the application and cleanup resources."""
