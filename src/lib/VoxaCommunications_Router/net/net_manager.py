@@ -26,6 +26,9 @@ class NetManager:
         self.features: dict = self.settings.get("features", {})
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.stun_servers: list[str] = self.p2p_config.get("stun_servers", list(STUN_SERVERS))
+        if not self.stun_servers or len(self.stun_servers) == 0:
+            self.logger.warning("No STUN servers configured, using default list")
+            self.stun_servers = list(STUN_SERVERS)
         self.ip_info: tuple[str, Any, Any] = get_ip_info(stun_host=random.choice(self.stun_servers)) # Probably not the best way to do this, but it works for now
         self.nat_type: Optional[str] = self.ip_info[0] if self.ip_info else None
         self.logger.warning(f"Detected NAT type: {self.nat_type}")
