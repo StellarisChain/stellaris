@@ -1,0 +1,6 @@
+{
+    "source_directories": [
+        "."
+    ],
+    "taint_models_path": "${{env.LD_LIBRARY_PATH}}"
+}
