@@ -177,7 +177,7 @@ class Main:
             
         except Exception as e:
             self.logger.error(f"Failed to setup Kytan: {e}")
-            raise RuntimeError(f"Kytan initialization failed: {e}")
+            # raise RuntimeError(f"Kytan initialization failed: {e}")
 
     def _setup_registry(self) -> None:
         """Initialize registry manager for production environment."""
