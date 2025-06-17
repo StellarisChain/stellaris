@@ -7,6 +7,7 @@ import sys
 import os
 import json
 import traceback
+import uvicorn
 import io
 from copy import deepcopy
 from typing import Optional
@@ -16,11 +17,12 @@ from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched, decrypt_routing_chain_block_previous, decrypt_routing_chain_block
-from lib.VoxaCommunications_Router.net.net_interface import send_request
+from lib.VoxaCommunications_Router.net.net_interface import send_request, request_factory
 from schema.RRISchema import RRISchema
 from util.filereader import save_key_file, read_key_file
 from util.jsonreader import read_json_from_namespace
 from util.wrappers import deprecated
+from main import app
 
 __version__ = "0.1.0-TEST"
 
@@ -246,15 +248,15 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     # RRI subparser
-    rri_parser = subparsers.add_parser('rri', help='RRI-related test data generation')
+    rri_parser: argparse.ArgumentParser = subparsers.add_parser('rri', help='RRI-related test data generation')
     rri_subparsers = rri_parser.add_subparsers(dest='rri_command', help='RRI commands')
     
     # RRI data generation subcommand
-    rri_data_parser = rri_subparsers.add_parser('generate', help='Generate test RRI data entries')
+    rri_data_parser: argparse.ArgumentParser = rri_subparsers.add_parser('generate', help='Generate test RRI data entries')
     rri_data_parser.add_argument("--count", type=int, default=10, help="Number of RRI entries to generate.")
     
     # RRI map generation subcommand
-    rri_map_parser = rri_subparsers.add_parser('map', help='Generate and display RRI relay map')
+    rri_map_parser: argparse.ArgumentParser = rri_subparsers.add_parser('map', help='Generate and display RRI relay map')
     rri_map_parser.add_argument("--benchmark", action="store_true", help="Enable benchmarking output for the map generation")
     rri_map_parser.add_argument("--method", type=str, default="default", choices=["default", "threaded", "batched", "all"], 
                                help="Method to use for routing chain generation (default: default)")
@@ -262,8 +264,21 @@ if __name__ == "__main__":
     rri_map_parser.add_argument("--testdecrypt", action="store_true", help="Runs the decryption test after generating the map")
     
     # RRI map decryption subcommand
-    rri_decrypt_parser = rri_subparsers.add_parser('decrypt', help='Decrypt test RRI map from file')
+    rri_decrypt_parser: argparse.ArgumentParser = rri_subparsers.add_parser('decrypt', help='Decrypt test RRI map from file')
     rri_decrypt_parser.add_argument("--file", type=str, help="Path to the RRI map file to decrypt. If not provided, uses the last generated map from last_run.txt")
+    
+    # App subparser
+    app_parser: argparse.ArgumentParser = subparsers.add_parser('app', help='Application-related operations')
+    app_subparsers = app_parser.add_subparsers(dest='app_command', help='App commands')
+    
+    # App run subcommand
+    app_run_parser: argparse.ArgumentParser = app_subparsers.add_parser('run', help='Run the application server')
+    app_run_parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind the server to (default: 0.0.0.0)")
+    app_run_parser.add_argument("--port", type=int, default=9999, help="Port to bind the server to (default: 9999)")
+    app_run_parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
+    app_run_parser.add_argument("--log-level", type=str, default="info", choices=["critical", "error", "warning", "info", "debug", "trace"], 
+                               help="Set the logging level (default: info)")
+    app_run_parser.add_argument("--use-config", action="store_true", help="Configuration file to use")
     
     args = parser.parse_args()
 
@@ -273,6 +288,7 @@ if __name__ == "__main__":
         python src/cli.py rri map --method default --mapsize 6 --testdecrypt
         python src/cli.py rri generate --count 20
         python src/cli.py rri decrypt
+        python src/cli.py app run --host 0.0.0.0 --port 8080 --reload
     """
     
     if args.command == 'rri':
@@ -285,5 +301,16 @@ if __name__ == "__main__":
             decrypt_test_rri_map(file_path=args.file)
         else:
             rri_parser.print_help()
+    elif args.command == 'app':
+        if args.app_command == 'run':
+            print(f"Starting application server on {args.host}:{args.port}")
+            config: dict = read_json_from_namespace("config.settings") if args.use_config else {
+                "host": args.host,
+                "port": args.port,
+                "reload": args.reload
+            }
+            uvicorn.run(app, host=config.get("host"), port=config.get("port"), reload=config.get("reload", False))
+        else:
+            app_parser.print_help()
     else:
         parser.print_help()
