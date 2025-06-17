@@ -15,6 +15,20 @@ class Packet(BaseModel):
         if self.str_data:
             self.raw_data = self.str_data.encode('utf-8', errors='ignore')
     
+    def has_header(self, header: Optional[str] = "") -> bool:
+        if not self.str_data:
+            self.raw_to_str()
+        if not header:
+            return False
+        return self.str_data.startswith(header)
+    
+    def assemble_header(self, header: str):
+        if not self.str_data:
+            self.raw_to_str()
+        if not self.str_data.startswith(header):
+            self.str_data = f"{header} {self.str_data}"
+        self.str_to_raw()
+    
     def get_header(self) -> Optional[str]:
         if not self.str_data:
             self.raw_to_str()
