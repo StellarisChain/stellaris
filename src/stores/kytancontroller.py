@@ -4,7 +4,6 @@ This module provides a controller class for managing Kytan client and server ins
 along with their configuration and lifecycle management.
 """
 
-import logging
 import secrets
 import base64
 from typing import Optional, Dict, Any
@@ -14,9 +13,10 @@ from kytan import KytanClient, KytanServer
 from kytan.kytan import KytanBase
 from util.jsonreader import read_json_from_namespace
 from util.filereader import file_to_str, read_key_file, save_key_file
+from util.logging import log
 
 
-logger = logging.getLogger(__name__)
+logger: log = log()
 
 
 class KytanController:
@@ -90,7 +90,6 @@ class KytanController:
             
         except Exception as e:
             logger.error(f"Failed to start Kytan server: {e}")
-            raise
 
     @property
     def client(self) -> Optional[KytanClient]:

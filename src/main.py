@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from routes import InternalRouter
 from colorama import init, Fore, Style
 from kvprocessor import KVProcessor, KVStructLoader, load_env
-from kytan import create_client, create_server, KytanError, KytanContextManager
+from kytan import KytanServer, create_client, create_server, KytanError, KytanContextManager
 from util.logging import log, set_log_config
 from util.filereader import file_to_str
 from util.setuputils import setup_directories
@@ -24,7 +24,7 @@ from util.jsonreader import read_json_from_namespace
 #from util.initnode import init_node
 from stores.globalconfig import set_global_config
 from stores.registrycontroller import set_global_registry_manager
-from stores.kytancontroller import KytanController, set_kytan_controller, initialize_kytan_controller
+from stores.kytancontroller import KytanController, KytanError, set_kytan_controller, initialize_kytan_controller
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from lib.VoxaCommunications_Router.ri.ri_manager import RIManager
 from src.lib.VoxaCommunications_Router.net.net_manager import NetManager, set_global_net_manager
@@ -62,9 +62,9 @@ class Main:
         try:
             self._load_configuration()
             self._setup_fastapi()
-            self._setup_kytan()
             self._setup_registry()
             self._setup_netmanager()
+            self._setup_kytan()
         except Exception as e:
             self.logger.error(f"Failed to initialize Main application: {e}")
             raise
@@ -170,12 +170,12 @@ class Main:
             self.kytan_controller = initialize_kytan_controller()
             
             # Create and configure the server
-            kytan_server = create_server()
+            kytan_server: KytanServer = create_server()
             self.kytan_controller.server = kytan_server
             
             self.logger.info("Kytan server created and configured successfully")
             
-        except Exception as e:
+        except Exception or KytanError as e:
             self.logger.error(f"Failed to setup Kytan: {e}")
             # raise RuntimeError(f"Kytan initialization failed: {e}")
 
@@ -234,7 +234,7 @@ class Main:
             try:
                 self.logger.info("Starting Kytan server in background thread...")
                 self.kytan_controller.serve()
-            except Exception as e:
+            except Exception or KytanError as e:
                 self.logger.error(f"Failed to start Kytan server: {e}")
         
         try:
