@@ -24,7 +24,7 @@ from util.jsonreader import read_json_from_namespace
 #from util.initnode import init_node
 from stores.globalconfig import set_global_config
 from stores.registrycontroller import set_global_registry_manager
-from stores.kytancontroller import KytanController, KytanError, set_kytan_controller, initialize_kytan_controller
+from stores.kytancontroller import KytanController, set_kytan_controller, initialize_kytan_controller
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
 from lib.VoxaCommunications_Router.ri.ri_manager import RIManager
 from src.lib.VoxaCommunications_Router.net.net_manager import NetManager, set_global_net_manager

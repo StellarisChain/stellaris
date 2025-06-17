@@ -29,8 +29,8 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd):$(pwd)/src"
 
 # Read host and port from config/p2p.json
 echo "Reading configuration from config/p2p.json..."
-HOST=$(python -c "import json; config = json.load(open('config/p2p.json')); print(config['host'])")
-PORT=$(python -c "import json; config = json.load(open('config/p2p.json')); print(config['port'])")
+HOST=$(python -c "import json;import os;import io;from typing import LiteralString;exec(open('src/util/jsonreader.py').read());config_data = read_json_from_namespace('config.settings');print(config_data['server-settings']['host'])")
+PORT=$(python -c "import json;import os;import io;from typing import LiteralString;exec(open('src/util/jsonreader.py').read());config_data = read_json_from_namespace('config.settings');print(config_data['server-settings']['port'])")
 
 echo "Testing FastAPI application startup..."
 
@@ -39,7 +39,7 @@ uvicorn src.main:app --host $HOST --port $PORT &
 SERVER_PID=$!
 
 # Wait a bit for server to start
-sleep 10
+sleep 60 # increase as server start time may vary
 
 # Test if server is responding
 if curl -f http://$HOST:$PORT/status/health 2>/dev/null || curl -f http://$HOST:$PORT/info/program_stats 2>/dev/null; then
