@@ -2,8 +2,10 @@ import miniupnpc
 import traceback
 import asyncio
 import os
+import random
+from stun import get_ip_info, STUN_SERVERS
 from libp2p import IHost, new_host
-from typing import Optional
+from typing import Optional, Any
 from lib.VoxaCommunications_Router.util.net_utils import get_program_ports
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from util.logging import log
@@ -23,6 +25,10 @@ class NetManager:
         self.settings: dict = read_json_from_namespace("config.settings") or {}
         self.features: dict = self.settings.get("features", {})
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+        self.stun_servers: list[str] = self.p2p_config.get("stun_servers", list(STUN_SERVERS))
+        self.ip_info: tuple[str, Any, Any] = get_ip_info(stun_host=random.choice(self.stun_servers)) # Probably not the best way to do this, but it works for now
+        self.nat_type: Optional[str] = self.ip_info[0] if self.ip_info else None
+        self.logger.warning(f"Detected NAT type: {self.nat_type}")
     
     async def setup_libp2p(self) -> None:
         """Set up the P2P host."""

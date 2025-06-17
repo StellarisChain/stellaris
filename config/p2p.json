@@ -9,6 +9,9 @@
         "voxacomms-relay", 
         "voxacomms-node"
     ],
+    "stun_servers": [
+
+    ],
     "replication_factor": 3,
     "routing_table_size": 1000,
     "heartbeat_interval": 30,
