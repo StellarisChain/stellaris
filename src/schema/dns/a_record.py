@@ -9,6 +9,7 @@ class ARecord(BaseModel):
     ip_address: Optional[str] = None  # Optional IP address, if not provided, will be resolved
     node_id: Optional[str] = None  # Optional node ID for the request
     allowed_protocols: list[str] = ["ssu", "i2p"]  # Allowed protocols for the request
+    creation_date: Optional[str] = None  # Creation date in ISO format
     ttl: Optional[int] = 3600  # Default TTL is 1 hour
     
     @validator('domain')

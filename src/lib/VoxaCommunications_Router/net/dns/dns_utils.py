@@ -1,7 +1,8 @@
 import os
 import io
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
+from datetime import datetime
 from util.jsonreader import read_json_from_namespace
 from util.logging import log
 from lib.compression import JSONCompressor
@@ -13,21 +14,21 @@ benchmark_collector: BenchmarkCollector = BenchmarkCollector()
 
 
 @benchmark("dns_utils.load_file", collector=benchmark_collector)
-def load_file(file_name: str, path: Optional[str] = "dns") -> dict:
+def load_file(file_name: str, path: Optional[str] = "dns") -> Tuple[dict, datetime]:
     """
     Fetch a JSONCompressor compresssed file, and load it into a dictionary.
     Args:
         file_name (str): The name of the file to load.
         path (Optional[str]): The path to the directory containing the file. Defaults to "dns".
     Returns:
-        dict: The loaded JSON data as a dictionary.
+        Tuple[dict, datetime]: A tuple containing the loaded JSON data as a dictionary and the file creation time.
     """
     logger.debug(f"Loading file: {file_name} from path: {path}")
 
     # Get storage configuration
     storage_config: dict = read_json_from_namespace("config.storage")
     if not storage_config:
-        return None
+        return None, None
     
     # Construct the DNS directory path
     data_dir: str = storage_config.get("data-dir", "data/")
@@ -37,7 +38,7 @@ def load_file(file_name: str, path: Optional[str] = "dns") -> dict:
     # Check if the path exists
     if not os.path.exists(file_dir):
         logger.warning(f"Directory does not exist: {file_dir}")
-        return None
+        return None, None
 
     compressor: JSONCompressor = JSONCompressor()
     file_name = file_name.replace(".bin", "") # Remove .bin extension if present
@@ -45,7 +46,11 @@ def load_file(file_name: str, path: Optional[str] = "dns") -> dict:
 
     if not os.path.exists(file_path):
         logger.warning(f"File does not exist: {file_path}")
-        return None
+        return None, None
+    
+    # Get file creation time
+    file_stat = os.stat(file_path)
+    creation_time = datetime.fromtimestamp(file_stat.st_ctime)
     
     with io.open(file_path, "rb") as file:
         compressed_data: bytes = file.read()
@@ -53,7 +58,7 @@ def load_file(file_name: str, path: Optional[str] = "dns") -> dict:
     json_data: str = compressor.decompress(compressed_data)
     dict_data: dict = json.loads(json_data)
 
-    return dict_data
+    return dict_data, creation_time
 
 @benchmark("dns_utils.save_file", collector=benchmark_collector)
 def save_file(file_name: str, data: dict, path: Optional[str] = "dns") -> bool:
