@@ -62,8 +62,8 @@ class Main:
         try:
             self._load_configuration()
             self._setup_fastapi()
-            self._setup_registry()
             self._setup_netmanager()
+            self._setup_registry()
             self._setup_kytan()
         except Exception as e:
             self.logger.error(f"Failed to initialize Main application: {e}")
