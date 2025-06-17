@@ -9,6 +9,7 @@ from lib.VoxaCommunications_Router.routing.typing import RequestContentsHTTP, Re
 from lib.VoxaCommunications_Router.routing.routeutils import encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched
 from util.logging import log
 from util.jsonutils import base_model_from_keys
+
 logger = log()
 
 """
@@ -23,9 +24,9 @@ def request_factory(target: str, request_protocol: str = "http", contents_kwargs
     request_contents: Union[RequestContentsHTTP, RequestContentsTCP] = None
     match request_protocol:
         case "http":
-            request_contents = base_model_from_keys(RequestContentsHTTP(), contents_kwargs)[0]
+            request_contents = RequestContentsHTTP(**contents_kwargs) or RequestContentsHTTP(**base_model_from_keys(RequestContentsHTTP, contents_kwargs)[1])
         case "tcp":
-            request_contents = base_model_from_keys(RequestContentsTCP(), contents_kwargs)[0]
+            request_contents = RequestContentsTCP(**base_model_from_keys(RequestContentsTCP, contents_kwargs)[1])
         case _:
             raise ValueError(f"Unknown request protocol: {request_protocol}. Supported protocols are 'http' and 'tcp'.")
     request_data: RequestData = RequestData(
@@ -35,6 +36,7 @@ def request_factory(target: str, request_protocol: str = "http", contents_kwargs
     )
     relay_map: RoutingMap = generate_relay_map(max_map_size=20)  # Default relay map generation
     request: Request = Request(request_data=request_data, routing_map=relay_map)
+    request.generate_routing_chain()
     
     return request
 
