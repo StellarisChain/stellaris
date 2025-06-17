@@ -1,8 +1,9 @@
 from pydantic import BaseModel, validator
 from typing import Optional, Union
+from schema.dns.dns_record import DNSRecord
 
 # ARecord for VoxaCommunications Router DNS requests
-class ARecord(BaseModel):
+class ARecord(DNSRecord):
     """Schema for DNS A Record requests"""
     record_type: str = "A"  # Record type. Keep this static.
     domain: str
