@@ -80,7 +80,7 @@ class DiscoveryManager:
             "cache_duration": 300,
             "auto_discovery_interval": 600,  # 10 minutes
             "networks": None,  # Auto-detect
-            "node_ports": [9000],
+            "node_ports": [9999, 10000, 10001, 10002, 10003, 10004, 10005],
             "relay_ports": [8080, 8081, 8082, 3000, 5000, 7000, 8000, 9001, 9002]
         }
         
@@ -126,7 +126,8 @@ class DiscoveryManager:
             # Run node and relay discovery concurrently
             node_task = self.node_discovery.discover_nodes(
                 networks=networks,
-                use_cache=not force_refresh
+                use_cache=not force_refresh,
+                ports=self.config.get("node_ports", [9999, 10000, 10001, 10002, 10003, 10004, 10005])
             )
             
             relay_task = self.relay_discovery.discover_relays(
@@ -300,7 +301,7 @@ class DiscoveryManager:
             "networks": networks,
             "last_discovery": self._discovery_results.get("last_updated"),
             "discovery_config": {
-                "node_ports": self.config.get("node_ports", [9000]),
+                "node_ports": self.config.get("node_ports", [9999, 10000, 10001, 10002, 10003, 10004, 10005]),
                 "relay_ports": self.relay_discovery.get_relay_ports(),
                 "cache_duration": self.config.get("cache_duration", 300)
             }

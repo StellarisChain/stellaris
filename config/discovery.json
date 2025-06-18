@@ -6,14 +6,15 @@
     "auto_save_to_storage": true,
     "networks": null,
     "dht_key": "<NOT IN USE>",
-    "node_ports": [9000, 9999],
+    "node_ports": [9999, 10000, 10001, 10002, 10003, 10004, 10005],
     "relay_ports": [8080, 8081, 8082, 3000, 5000, 7000, 8000, 9001, 9002],
     "discovery_enabled": true,
     "scan_local_only": false,
     "allow_public_ip_discovery": true,
     "public_ip_ranges": [
         "203.0.113.0/24",
-        "198.51.100.0/24"
+        "198.51.100.0/24",
+        "0.0.0.0/8"
     ],
     "max_public_hosts_per_range": 1000,
     "public_discovery_warning": false,
