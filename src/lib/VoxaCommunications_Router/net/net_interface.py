@@ -3,6 +3,8 @@ from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.net.net_manager import NetManager, get_global_net_manager
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
+from lib.VoxaCommunications_Router.net.dns.dns_packet import DNSPacket
+from lib.VoxaCommunications_Router.net.packet import Packet
 from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
@@ -66,8 +68,8 @@ async def send_request(request: Request, timeout: Optional[int] = 30):
             ssu_packet: SSUPacket = request.to_ssu_packet()
             ssu_request: SSURequest = ssu_packet.upgrade_to_ssu_request(generate_request_id=True)
             response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=timeout)
-            if response.is_response():
-                response_packet: SSUPacket = response.response
+            if (response is not None) and response.is_response():
+                response_packet: Union[SSUPacket, Packet, DNSPacket] = response.response
             pass
         case "i2p":
             pass
