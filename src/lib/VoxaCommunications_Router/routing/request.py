@@ -47,7 +47,7 @@ class Request:
         if not self.request_data:
             raise ValueError("Request data is not set.")
         ssu_packet = SSUPacket()
-        next_blocks: Union[str, bytes, dict] = self.routing_chain_next_block(self.routing_chain)
+        next_blocks: Union[str, bytes, dict] = self.routing_chain_next_block()
         ssu_packet.str_data = next_blocks
         ssu_packet.addr = self.routing_chain.get("relay_ip")
         ssu_packet.str_to_raw()

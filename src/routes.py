@@ -84,10 +84,10 @@ class InternalRouter:
                                 self.logger.info(f"Response model disabled for {full_module_path}")
 
                             # Disalow the test directory if we are not in debug mode
-                            if dir_name == "test" and self.dev_config.get("debug", False):
+                            if dir_name == "test" and not self.dev_config.get("debug", False):
                                 self.logger.info(f"Skipping test directory {dir_name} in non-debug mode")
                                 continue
-                            
+
                             # Determine HTTP method based on module name
                             if module_name.startswith('add_'):
                                 # POST method for add operations
