@@ -4,6 +4,7 @@ import uuid
 import random
 import argparse
 import sys
+import shutil
 import os
 import json
 import traceback
@@ -33,6 +34,25 @@ def generate_random_ip() -> str:
     """Generate a random IP address."""
     return f"{random.randint(1, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}"
 
+def create_test_rri(relay_ip: str, relay_port: Optional[int] = None) -> None:
+    key_generator = RSAKeyGenerator()
+    keys = key_generator.generate_keys()
+    public_key, private_key = keys["public_key"], keys["private_key"]
+    rri_data = RRISchema(
+        relay_id=str(uuid.uuid4()),
+        relay_ip=relay_ip,
+        relay_port=relay_port,
+        relay_type="standard",
+        capabilities=["routing", "forwarding"],
+        metadata={"location": "datacenter-1"},
+        public_key=public_key,
+        public_key_hash=keys["public_key_hash"],  # Use hash from same key generation
+        private_key_debug=private_key if debug else None,
+        program_version=__version__
+    ).dict()
+    save_ri(rri_data["relay_id"], rri_data, "rri")
+    save_key_file(rri_data["relay_id"], private_key, "rri")
+    
 # Clear your RRI after doing this, if you are using a production environment
 def generate_test_rri_data(count: int = 10) -> None:
     for _ in range(count):
@@ -54,7 +74,7 @@ def generate_test_rri_data(count: int = 10) -> None:
         ).dict()
         save_ri(rri_data["relay_id"], rri_data, "rri")
         save_key_file(rri_data["relay_id"], private_key, "rri")
-        save_key_file(f"{rri_data['relay_id']}_pub", public_key, "rri") # remove after debugging
+        #save_key_file(f"{rri_data['relay_id']}_pub", public_key, "rri") # remove after debugging
 
 @deprecated("Debugging function, not for production use")
 def diagnose_decryption_issue(current_block: dict, private_key: str) -> dict:
@@ -255,6 +275,15 @@ if __name__ == "__main__":
     rri_data_parser: argparse.ArgumentParser = rri_subparsers.add_parser('generate', help='Generate test RRI data entries')
     rri_data_parser.add_argument("--count", type=int, default=10, help="Number of RRI entries to generate.")
     
+    # RRI create subcommand
+    rri_create_parser: argparse.ArgumentParser = rri_subparsers.add_parser('create', help='Create a single RRI entry with specified IP and port')
+    rri_create_parser.add_argument("--ip", type=str, required=True, help="IP address for the RRI entry")
+    rri_create_parser.add_argument("--port", type=int, help="Port for the RRI entry (optional)")
+    
+    # RRI clear subcommand
+    rri_clear_parser: argparse.ArgumentParser = rri_subparsers.add_parser('clear', help='Clear all RRI data entries')
+    rri_clear_parser.add_argument("--confirm", action="store_true", help="Confirm deletion of all RRI data")
+    
     # RRI map generation subcommand
     rri_map_parser: argparse.ArgumentParser = rri_subparsers.add_parser('map', help='Generate and display RRI relay map')
     rri_map_parser.add_argument("--benchmark", action="store_true", help="Enable benchmarking output for the map generation")
@@ -299,6 +328,20 @@ if __name__ == "__main__":
             generate_test_rri_map(benchmark=args.benchmark, method=args.method, max_map_size=args.mapsize, testdecrypt=args.testdecrypt)
         elif args.rri_command == 'decrypt':
             decrypt_test_rri_map(file_path=args.file)
+        elif args.rri_command == 'create':
+            create_test_rri(args.ip, args.port)
+            print(f"Created RRI entry with IP: {args.ip}" + (f" and port: {args.port}" if args.port else ""))
+        elif args.rri_command == 'clear':
+            if args.confirm:
+                # Clear the RRI directory
+                rri_dir = os.path.join("data", "rri")
+                if os.path.exists(rri_dir):
+                    shutil.rmtree(rri_dir)
+                    print("Cleared all RRI data entries.")
+                else:
+                    print("RRI directory does not exist.")
+            else:
+                print("Clear command requires confirmation. Use --confirm to proceed.")
         else:
             rri_parser.print_help()
     elif args.command == 'app':
