@@ -17,20 +17,20 @@ ENABLE_RESPONSE_MODEL = False # It complains otherwise, used by routes.py
 """
 
 # test the request factory
-def handler(request: FastAPIRequest):
+async def handler(request: FastAPIRequest):
     """
     
     """
     try:
-        request_artifact: Request = get_artifact_from_type(type(Request))
+        request_artifact: Request = get_artifact_from_type(Request)
         if request_artifact:
             logger.info(f"Request artifact found: {request_artifact}")
-            loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-            loop.run_in_executor(None, send_request, request_artifact)
+            # or asyncio.run(send_request(request_artifact))
+            await send_request(request_artifact)
         else:
             logger.warning("No request artifact found")
             raise HTTPException(status_code=404, detail="Request artifact not found")
     except Exception as e:
-        logger.error(f"Error durring request send: {e}")
+        logger.error(f"Error during request send: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
