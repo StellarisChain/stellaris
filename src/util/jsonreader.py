@@ -30,6 +30,22 @@ def read_json_file(file_path) -> dict:
         return json.loads(json_content)
     
 def read_json_from_namespace(namespace: str) -> dict:
-    #ex config.settings is config/settings.json
-    namespace = namespace.strip().replace(".", "/") + ".json"
-    return read_json_file(namespace)
+    """
+    Read JSON from namespace with support for custom config paths.
+    Supports VOXA_CONFIG_PATH environment variable for multi-node deployments.
+    
+    :param namespace: Namespace like 'config.settings' -> 'config/settings.json'
+    :return: Dictionary containing the JSON data.
+    """
+    # Check for custom config path from environment
+    custom_config_path = os.environ.get('VOXA_CONFIG_PATH')
+    
+    if custom_config_path:
+        # Use custom config directory
+        filename = namespace.split('.')[-1] + ".json"  # Extract just the filename
+        file_path = os.path.join(custom_config_path, filename)
+    else:
+        # Use default namespace to path conversion
+        file_path = namespace.strip().replace(".", "/") + ".json"
+    
+    return read_json_file(file_path)
