@@ -1,0 +1,14 @@
+services:
+  node:
+    image: voxacommunications-netnode:latest
+    container_name: voxacommunications-netnode
+    environment:
+      - email=registry_email_here
+      - password=registry_password_here
+      - code=registry_code_here_optional
+      - env=production
+    ports:
+      - "9999:9999"
+      - "9000:9000"
+    volumes:
+      - ./config:/app/config
