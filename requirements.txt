@@ -16,3 +16,5 @@ modern-benchmark>=0.1.0
 libp2p>=0.2.8
 miniupnpc>=2.3.3
 pystun3>=2.0.0
+maturin
+pip-tools

@@ -1,0 +1,259 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel", "maturin>=1.0,<2.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voxacommunications-netnode"
+version = "0.1.4"
+description = "A decentralized network for secure communication with dynamic routing and crypto chain integration"
+readme = "README.md"
+license = {text = "CC-BY-NC-SA-4.0"}
+authors = [
+    {name = "VoxaCommunications Team", email = "voxa@connor33341.dev"}
+]
+maintainers = [
+    {name = "VoxaCommunications Team", email = "voxa@connor33341.dev"}
+]
+keywords = [
+    "decentralized",
+    "networking",
+    "privacy",
+    "cryptography",
+    "p2p",
+    "communication",
+    "routing",
+    "blockchain"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet",
+    "Topic :: Security :: Cryptography",
+    "Topic :: System :: Networking",
+    "Topic :: Communications",
+]
+requires-python = ">=3.8"
+dynamic = ["dependencies"]
+
+[project.optional-dependencies]
+dev = [
+    "mypy==1.16.0",
+    "pytest==8.3.5",
+    "pytest-asyncio",
+    "pytest-cov",
+    "black",
+    "isort",
+    "flake8",
+    "pre-commit",
+]
+rust = [
+    "maturin",
+]
+testing = [
+    "pytest==8.3.5",
+    "pytest-asyncio",
+    "pytest-cov",
+    "httpx[test]",
+]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-typehints",
+]
+
+[project.urls]
+Homepage = "https://github.com/Voxa-Communications/VoxaCommunications-NetNode"
+Repository = "https://github.com/Voxa-Communications/VoxaCommunications-NetNode"
+Documentation = "https://github.com/Voxa-Communications/VoxaCommunications-NetNode/blob/main/README.md"
+"Bug Tracker" = "https://github.com/Voxa-Communications/VoxaCommunications-NetNode/issues"
+"Telegram" = "https://t.me/voxacommunications"
+"Discord" = "https://discord.gg/EDtPX5E4D4"
+
+[project.scripts]
+voxa-netnode = "src.main:main"
+voxa-cli = "src.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["*"]
+exclude = ["tests*", "testoutput*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.yaml", "*.yml", "*.toml", "*.txt", "*.md"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | testoutput
+  | struct
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["src", "lib", "util", "api", "stores"]
+skip_glob = ["testoutput/*", "struct/*", "build/*", "dist/*"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+strict = false
+ignore_missing_imports = true
+implicit_optional = true
+show_error_codes = true
+cache_dir = ".mypy_cache"
+files = [
+    "src/",
+]
+exclude = [
+    "testoutput/",
+    "struct/",
+    "build/",
+    "dist/",
+    "tests/",
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "testoutput/*",
+    "struct/*",
+    "build/*",
+    "dist/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503", "E501"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "testoutput",
+    "struct",
+    ".venv",
+    ".mypy_cache",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "testoutput", "struct", "build", "dist"]
+skips = ["B101", "B601"]
+
+[tool.pylint]
+disable = [
+    "C0114",  # missing-module-docstring
+    "C0115",  # missing-class-docstring
+    "C0116",  # missing-function-docstring
+    "R0903",  # too-few-public-methods
+    "R0913",  # too-many-arguments
+]
+good-names = ["i", "j", "k", "ex", "Run", "_", "id", "ip"]
+max-line-length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "testoutput",
+    "struct",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "INT", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "PERF", "FURB", "LOG", "RUF"]
+ignore = ["E501", "S101", "S603", "S607", "PLR0913", "PLR0912", "PLR0915"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "PLR2004", "S105", "S106"]
+"src/cli.py" = ["T201"]  # Allow print statements in CLI
+"test_*.py" = ["S101", "PLR2004"]
+"*_test.py" = ["S101", "PLR2004"]
