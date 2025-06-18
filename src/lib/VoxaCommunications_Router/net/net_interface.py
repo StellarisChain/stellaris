@@ -37,7 +37,7 @@ def request_factory(target: str, request_protocol: str = "http", contents_kwargs
         request_contents=request_contents
     )
     relay_map: RoutingMap = generate_relay_map(max_map_size=20)  # Default relay map generation
-    request: Request = Request(request_data=request_data, routing_map=relay_map)
+    request: Request = Request(request_data=request_data, routing_map=relay_map, target=target)
     request.generate_routing_chain()
     return request
 
@@ -52,7 +52,7 @@ async def send_request(request: Request, timeout: Optional[int] = 30):
     Returns:
         Response: The response object received from the network.
     """
-    logger.info(f"Sending request to target: {request.target} via protocol: {request.request_protocol}")
+    logger.info(f"Sending request with end target: {request.target} via protocol: {request.request_protocol}")
     
     if not request.routing_chain:
         request.routing_chain = generate_encrypted_routing_chain(request)
@@ -62,7 +62,7 @@ async def send_request(request: Request, timeout: Optional[int] = 30):
         case "ssu":
             ssu_node: SSUNode = net_manager.ssu_node
             if not ssu_node or not ssu_node.running:
-                raise RuntimeError("SSU Node is not running. Cannot send SSU request.")
+                raise RuntimeError(f"SSU Node is not running. Cannot send SSU request. {ssu_node}:{ssu_node.running}")
             ssu_packet: SSUPacket = request.to_ssu_packet()
             ssu_request: SSURequest = ssu_packet.upgrade_to_ssu_request(generate_request_id=True)
             response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=timeout)

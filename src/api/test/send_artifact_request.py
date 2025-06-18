@@ -19,7 +19,7 @@ ENABLE_RESPONSE_MODEL = False # It complains otherwise, used by routes.py
 # test the request factory
 async def handler(request: FastAPIRequest):
     """
-    
+    If kytan errors, SSUNode wont run.
     """
     try:
         request_artifact: Request = get_artifact_from_type(Request)

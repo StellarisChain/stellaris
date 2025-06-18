@@ -7,6 +7,7 @@ from fastapi import WebSocket, APIRouter, FastAPI, Response
 #from lib.dynamiclibrary.loader import DynamicLibraryLoader
 #from lib.dynamiclibrary.structs import DynamicLibrary
 from lib.dynamiclibrary import DynamicLibrary, DynamicLibraryLoader
+from util.jsonreader import read_json_from_namespace
 from util.logging import log
 
 class InternalRouter:
@@ -14,6 +15,7 @@ class InternalRouter:
         self.router = APIRouter()
         self.app = app
         self.sub_routers: Dict[str, APIRouter] = {}
+        self.dev_config: dict = read_json_from_namespace("config.dev") or {}
         self.logger = log()
         
     def include_router(self, new_router: APIRouter):
@@ -80,6 +82,11 @@ class InternalRouter:
                             if hasattr(module, 'ENABLE_RESPONSE_MODEL') and getattr(module, 'ENABLE_RESPONSE_MODEL') is False:
                                 response_model = False
                                 self.logger.info(f"Response model disabled for {full_module_path}")
+
+                            # Disalow the test directory if we are not in debug mode
+                            if dir_name == "test" and self.dev_config.get("debug", False):
+                                self.logger.info(f"Skipping test directory {dir_name} in non-debug mode")
+                                continue
                             
                             # Determine HTTP method based on module name
                             if module_name.startswith('add_'):
