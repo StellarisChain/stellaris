@@ -20,8 +20,8 @@ def get_artifact_from_type(artifact_type: Union[type, Any]) -> Optional[Any]:
     :param artifact_type: The type of the artifact to get.
     :return: The artifact if found, None otherwise.
     """
-    global global_artifacts
     for artifact in global_artifacts:
+        logger.debug(f"Checking artifact: {str(type(artifact))} for type: {str(artifact_type)}")
         if isinstance(artifact, artifact_type):
             return artifact
     return None

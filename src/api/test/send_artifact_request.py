@@ -22,7 +22,7 @@ def handler(request: FastAPIRequest):
     
     """
     try:
-        request_artifact: Request = get_artifact_from_type(type(request))
+        request_artifact: Request = get_artifact_from_type(type(Request))
         if request_artifact:
             logger.info(f"Request artifact found: {request_artifact}")
             loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
