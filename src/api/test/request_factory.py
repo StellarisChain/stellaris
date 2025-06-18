@@ -4,6 +4,7 @@ from typing import Any, Optional
 from lib.VoxaCommunications_Router.net.net_interface import request_factory
 from lib.VoxaCommunications_Router.routing.request import Request
 from schema.test.request_factory_schema import RequestFactorySchema
+from stores.testartifacts import set_artifact
 from util.logging import log
 
 logger = log()
@@ -41,6 +42,7 @@ def handler(request: FastAPIRequest, request_factory_schema: RequestFactorySchem
         
         # Log the created request object
         logger.info(f"Created request object: {request_obj}")
+        set_artifact(request_obj) # Store the request object in global artifacts for testing
         return {"status": "success", "request": request_obj.to_dict()}
     
     except Exception as e:

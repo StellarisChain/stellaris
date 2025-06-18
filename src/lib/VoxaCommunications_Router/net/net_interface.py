@@ -66,6 +66,8 @@ async def send_request(request: Request, timeout: Optional[int] = 30):
             ssu_packet: SSUPacket = request.to_ssu_packet()
             ssu_request: SSURequest = ssu_packet.upgrade_to_ssu_request(generate_request_id=True)
             response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=timeout)
+            if response.is_response():
+                response_packet: SSUPacket = response.response
             pass
         case "i2p":
             pass
