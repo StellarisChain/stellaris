@@ -31,6 +31,7 @@ RUN chmod +x run.sh
 
 # Expose the port the app runs on
 EXPOSE 9999
+EXPOSE 9000
 
 # Create a non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \
