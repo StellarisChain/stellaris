@@ -9,9 +9,12 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app:/app/src
 
-# Install system dependencies
+# Install system dependencies required for building Python packages
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
+    make \
+    libgmp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better Docker layer caching
