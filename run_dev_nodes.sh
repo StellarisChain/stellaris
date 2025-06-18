@@ -11,15 +11,23 @@ BASE_API_PORT=9999
 BASE_P2P_PORT=9000
 NODE_COUNT=${1:-$DEFAULT_NODE_COUNT}
 
+# Timing configuration for slow startup nodes
+NODE_STARTUP_DELAY=5        # Delay between starting each node
+HEALTH_CHECK_DELAY=70       # Wait time before starting health checks (45-60s + buffer)
+HEALTH_CHECK_TIMEOUT=10     # Timeout for each health check attempt
+HEALTH_CHECK_RETRIES=5      # Number of retry attempts per node
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}=== VoxaCommunications Multi-Node Development Environment ===${NC}"
 echo -e "${YELLOW}Starting $NODE_COUNT development nodes...${NC}"
+echo -e "${CYAN}Note: Nodes take 45-60 seconds to fully initialize${NC}"
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -199,31 +207,69 @@ start_node() {
     echo -e "${GREEN}  P2P Port: $p2p_port${NC}"
     echo -e "${GREEN}  Log: logs/node-$node_id.log${NC}"
     
-    # Brief pause between starting nodes
+    # Check if process started successfully
     sleep 2
+    if ! kill -0 "$node_pid" 2>/dev/null; then
+        echo -e "${RED}✗ Node $node_id failed to start!${NC}"
+        echo -e "${RED}Check logs/node-$node_id.log for details${NC}"
+        return 1
+    fi
+    
+    echo -e "${CYAN}Node $node_id process is running (initializing...)${NC}"
 }
 
-# Function to check node health
+# Enhanced function to check node health with retries
 check_node_health() {
     local node_id=$1
     local api_port=$2
+    local retries=$3
     
-    echo -e "${YELLOW}Checking Node $node_id health...${NC}"
+    echo -e "${YELLOW}Checking Node $node_id health (may take up to $((retries * HEALTH_CHECK_TIMEOUT)) seconds)...${NC}"
     
-    # Wait a moment for the node to start
-    sleep 3
+    for ((attempt=1; attempt<=retries; attempt++)); do
+        echo -e "${CYAN}  Attempt $attempt/$retries for Node $node_id...${NC}"
+        
+        # Try multiple endpoints to check if node is responding
+        local endpoints=("/status/health" "/info/program_stats" "/" "/docs")
+        local node_responding=false
+        
+        for endpoint in "${endpoints[@]}"; do
+            if timeout "$HEALTH_CHECK_TIMEOUT" curl -s -f "http://127.0.0.1:$api_port$endpoint" > /dev/null 2>&1; then
+                echo -e "${GREEN}✓ Node $node_id is responding on $endpoint${NC}"
+                node_responding=true
+                break
+            fi
+        done
+        
+        if [ "$node_responding" = true ]; then
+            return 0
+        fi
+        
+        if [ $attempt -lt $retries ]; then
+            echo -e "${YELLOW}  Node $node_id not ready yet, waiting 10 seconds...${NC}"
+            sleep 10
+        fi
+    done
     
-    # Try to connect to health endpoint
-    if curl -s -f "http://127.0.0.1:$api_port/status/health" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ Node $node_id is healthy${NC}"
-        return 0
-    elif curl -s -f "http://127.0.0.1:$api_port/info/program_stats" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ Node $node_id is responding${NC}"
-        return 0
-    else
-        echo -e "${RED}✗ Node $node_id health check failed${NC}"
-        return 1
-    fi
+    echo -e "${RED}✗ Node $node_id health check failed after $retries attempts${NC}"
+    echo -e "${RED}  Check logs/node-$node_id.log for startup issues${NC}"
+    return 1
+}
+
+# Function to display startup progress
+show_startup_progress() {
+    local total_wait=$1
+    local interval=5
+    
+    echo -e "\n${CYAN}Waiting for nodes to initialize (${total_wait}s total)...${NC}"
+    
+    for ((i=interval; i<=total_wait; i+=interval)); do
+        local remaining=$((total_wait - i))
+        echo -e "${YELLOW}Startup progress: ${i}s/${total_wait}s (${remaining}s remaining)${NC}"
+        sleep $interval
+    done
+    
+    echo -e "${GREEN}Startup wait period complete, beginning health checks...${NC}"
 }
 
 # Main execution
@@ -232,35 +278,58 @@ echo -e "${YELLOW}Setting up $NODE_COUNT development nodes...${NC}"
 # Create logs directory
 mkdir -p logs
 
-# Start nodes
+# Start nodes with delays between each
 for ((i=1; i<=NODE_COUNT; i++)); do
     api_port=$((BASE_API_PORT + i - 1))
     p2p_port=$((BASE_P2P_PORT + i - 1))
     
     create_node_config "$i" "$api_port" "$p2p_port"
     start_node "$i" "$api_port" "$p2p_port"
+    
+    # Add delay between node starts (except for the last node)
+    if [ $i -lt $NODE_COUNT ]; then
+        echo -e "${CYAN}Waiting ${NODE_STARTUP_DELAY}s before starting next node...${NC}"
+        sleep $NODE_STARTUP_DELAY
+    fi
 done
 
 echo -e "\n${GREEN}All $NODE_COUNT nodes started!${NC}"
 
-# Health checks
-echo -e "\n${YELLOW}Performing health checks...${NC}"
+# Show progress during startup wait
+show_startup_progress $HEALTH_CHECK_DELAY
+
+# Health checks with retries
+echo -e "\n${YELLOW}Performing health checks with retries...${NC}"
+healthy_nodes=0
 for ((i=1; i<=NODE_COUNT; i++)); do
     api_port=$((BASE_API_PORT + i - 1))
-    check_node_health "$i" "$api_port"
+    if check_node_health "$i" "$api_port" "$HEALTH_CHECK_RETRIES"; then
+        ((healthy_nodes++))
+    fi
 done
 
-# Display node information
+# Display final status
 echo -e "\n${BLUE}=== Development Network Status ===${NC}"
-echo -e "${YELLOW}Nodes running:${NC}"
+echo -e "${GREEN}Healthy nodes: $healthy_nodes/$NODE_COUNT${NC}"
+
+if [ $healthy_nodes -eq $NODE_COUNT ]; then
+    echo -e "${GREEN}🎉 All nodes are healthy and ready!${NC}"
+elif [ $healthy_nodes -gt 0 ]; then
+    echo -e "${YELLOW}⚠️  Some nodes may still be initializing. Check logs for details.${NC}"
+else
+    echo -e "${RED}❌ No nodes are responding. Check logs for startup issues.${NC}"
+fi
+
+echo -e "\n${YELLOW}Node Information:${NC}"
 for ((i=1; i<=NODE_COUNT; i++)); do
     api_port=$((BASE_API_PORT + i - 1))
     p2p_port=$((BASE_P2P_PORT + i - 1))
     echo -e "${GREEN}Node $i:${NC}"
-    echo -e "  API:  http://127.0.0.1:$api_port"
-    echo -e "  P2P:  127.0.0.1:$p2p_port"
+    echo -e "  API:    http://127.0.0.1:$api_port"
+    echo -e "  P2P:    127.0.0.1:$p2p_port"
     echo -e "  Health: http://127.0.0.1:$api_port/status/health"
     echo -e "  Stats:  http://127.0.0.1:$api_port/info/program_stats"
+    echo -e "  Logs:   tail -f logs/node-$i.log"
 done
 
 echo -e "\n${YELLOW}Useful commands:${NC}"
@@ -272,18 +341,27 @@ for ((i=1; i<=NODE_COUNT; i++)); do
     echo -e "curl http://127.0.0.1:$api_port/status/health"
 done
 
+echo -e "\n${BLUE}# Monitor all logs:${NC}"
+echo -e "tail -f logs/node-*.log"
+
+echo -e "\n${BLUE}# Check process status:${NC}"
+echo -e "ps aux | grep uvicorn"
+
 echo -e "\n${RED}Press Ctrl+C to stop all nodes${NC}"
 
-# Keep script running and wait for interrupt
+# Keep script running and monitor node health
+echo -e "\n${CYAN}Monitoring nodes... (Press Ctrl+C to stop)${NC}"
 while true; do
-    sleep 1
+    sleep 30
     
     # Check if any nodes have died
+    dead_nodes=0
     for i in "${!NODE_PIDS[@]}"; do
         pid="${NODE_PIDS[$i]}"
         if ! kill -0 "$pid" 2>/dev/null; then
             echo -e "${RED}Node $((i+1)) (PID: $pid) has stopped unexpectedly${NC}"
             unset NODE_PIDS[$i]
+            ((dead_nodes++))
         fi
     done
     
@@ -291,5 +369,7 @@ while true; do
     if [ ${#NODE_PIDS[@]} -eq 0 ]; then
         echo -e "${RED}All nodes have stopped. Exiting...${NC}"
         cleanup
+    elif [ $dead_nodes -gt 0 ]; then
+        echo -e "${YELLOW}$dead_nodes node(s) have stopped. Remaining: ${#NODE_PIDS[@]}${NC}"
     fi
 done
