@@ -1,6 +1,6 @@
 import json
 import uuid
-from typing import Optional, Union, Dict, List
+from typing import Optional, Union, Dict, List, Any
 from lib.VoxaCommunications_Router.net.packet import Packet
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket, SSU_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket, SSU_CONTROL_HEADER
@@ -24,12 +24,10 @@ class SSUFragmentPacket(Packet):
     due to UDP size limitations.
     """
     
-    def __init__(self, **data):
-        super().__init__(**data)
-        self.fragment_id: str = None
-        self.fragment_index: int = 0
-        self.total_fragments: int = 1
-        self.original_data: bytes = None
+    fragment_id: Optional[str] = None
+    fragment_index: int = 0
+    total_fragments: int = 1
+    original_data: Optional[bytes] = None
     
     def create_fragment(self, fragment_id: str, fragment_index: int, total_fragments: int, data: bytes):
         """Create a fragment packet with the given parameters."""
@@ -39,7 +37,7 @@ class SSUFragmentPacket(Packet):
         self.original_data = data
         
         # Create the fragment payload
-        fragment_payload = {
+        fragment_payload: dict[str, Any] = {
             "fragment_id": fragment_id,
             "fragment_index": fragment_index,
             "total_fragments": total_fragments,
@@ -57,7 +55,7 @@ class SSUFragmentPacket(Packet):
         # Remove header and parse JSON
         data_without_header = self.str_data.replace(f"{SSU_FRAGMENT_HEADER}:", "", 1)
         try:
-            fragment_data = json.loads(data_without_header)
+            fragment_data: dict = json.loads(data_without_header)
             self.fragment_id = fragment_data.get("fragment_id")
             self.fragment_index = fragment_data.get("fragment_index", 0)
             self.total_fragments = fragment_data.get("total_fragments", 1)
