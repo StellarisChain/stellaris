@@ -1,8 +1,9 @@
-from typing import Union, Optional
+import json
+from typing import Union, Optional, Any
 from pydantic import BaseModel, validator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request_data import RequestData
-from lib.VoxaCommunications_Router.routing.routeutils import routing_chain_next_block
+#from lib.VoxaCommunications_Router.routing.routeutils import routing_chain_next_block
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
 
 class Request:
@@ -46,7 +47,7 @@ class Request:
         if not self.request_data:
             raise ValueError("Request data is not set.")
         ssu_packet = SSUPacket()
-        next_blocks: Union[str, bytes, dict] = routing_chain_next_block(self.routing_chain)
+        next_blocks: Union[str, bytes, dict] = self.routing_chain_next_block(self.routing_chain)
         ssu_packet.str_data = next_blocks
         ssu_packet.addr = self.routing_chain.get("relay_ip")
         ssu_packet.str_to_raw()
@@ -104,3 +105,30 @@ class Request:
             "target": self.target,
             "routing_chain": self.routing_chain
         }
+    
+    def routing_chain_next_block(self) -> Any:
+        """Get the next block in the routing chain.
+
+        Args:
+            routing_chain (dict, str): The routing chain to process.
+
+        Returns:
+            Any: The next block in the routing chain.
+        """
+        # Stolen from routeutils.py
+        routing_chain = self.routing_chain
+        if isinstance(routing_chain, str):
+            try:
+                routing_chain = json.loads(routing_chain)
+            except json.JSONDecodeError as e:
+                return None
+
+        if not isinstance(routing_chain, dict):
+            return None
+
+        # Check for the next block
+        next_block = routing_chain.get("child_route")
+        if not next_block:
+            return None
+
+        return next_block
