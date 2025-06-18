@@ -3,7 +3,8 @@
 # Multi-Node Development Environment
 # Runs multiple VoxaCommunications-NetNode instances for testing
 
-set -e
+# Removed 'set -e' to prevent premature script exit
+# set -e
 
 # Configuration
 DEFAULT_NODE_COUNT=3
@@ -303,10 +304,19 @@ echo -e "\n${YELLOW}Performing health checks with retries...${NC}"
 healthy_nodes=0
 for ((i=1; i<=NODE_COUNT; i++)); do
     api_port=$((BASE_API_PORT + i - 1))
+    echo -e "${CYAN}Checking Node $i at port $api_port...${NC}"
+    
     if check_node_health "$i" "$api_port" "$HEALTH_CHECK_RETRIES"; then
+        echo -e "${GREEN}Node $i health check passed${NC}"
         ((healthy_nodes++))
+    else
+        echo -e "${RED}Node $i health check failed${NC}"
     fi
+    
+    echo -e "${CYAN}Health checks completed: $i/$NODE_COUNT (${healthy_nodes} healthy)${NC}"
 done
+
+echo -e "\n${GREEN}Health check process completed!${NC}"
 
 # Display final status
 echo -e "\n${BLUE}=== Development Network Status ===${NC}"
