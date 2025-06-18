@@ -1,12 +1,29 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Union
 
 # Unencrypted plaintext packet structure
 class Packet(BaseModel):
     raw_data: Optional[bytes] = None # UTF-8 encoded string data
     str_data: Optional[str] = None
-    addr: Optional[tuple[str, int]] = None
+    addr: Optional[Union[tuple[str, int], str]] = None # Either a tuple of (IP, port) or a string representing the address
 
+    # Set the addr to a tuple
+    def correct_addr(self) -> None:
+        if isinstance(self.addr, str):
+            parts: list[str] = self.addr.split(":")
+            if len(parts) == 2:
+                self.addr = (parts[0], int(parts[1]))
+            else:
+                # If the address dosent have a port, set a default port
+                self.addr = (self.addr, 9000) # TODO: Fix this hardcoded port
+        elif isinstance(self.addr, tuple) and len(self.addr) == 2:
+            ip, port = self.addr
+            if not isinstance(port, int):
+                port = int(port)  # Ensure port is an integer
+            self.addr = (ip, port)
+        else:
+            raise ValueError("Address must be a tuple of (IP, port) or a string in 'IP:port' format.")
+    
     def raw_to_str(self):
         if self.raw_data:
             self.str_data = self.raw_data.decode('utf-8', errors='ignore')

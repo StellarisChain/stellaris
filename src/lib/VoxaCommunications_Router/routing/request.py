@@ -49,7 +49,7 @@ class Request:
         ssu_packet = SSUPacket()
         next_blocks: Union[str, bytes, dict] = self.routing_chain_next_block()
         ssu_packet.str_data = next_blocks
-        ssu_packet.addr = self.routing_chain.get("relay_ip")
+        ssu_packet.addr = (self.routing_chain.get("relay_ip"), self.routing_chain.get("relay_port")) if isinstance(self.routing_chain, dict) else None
         ssu_packet.str_to_raw()
 
         return ssu_packet
