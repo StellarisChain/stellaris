@@ -5,6 +5,7 @@ from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
 from lib.VoxaCommunications_Router.net.dns.dns_packet import DNSPacket
 from lib.VoxaCommunications_Router.net.packet import Packet
+from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket
 from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request

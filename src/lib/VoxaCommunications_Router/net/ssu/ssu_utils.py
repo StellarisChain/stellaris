@@ -5,6 +5,7 @@ from lib.VoxaCommunications_Router.net.packet import Packet
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket, SSU_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket, SSU_CONTROL_HEADER
 from lib.VoxaCommunications_Router.net.dns.dns_packet import DNSPacket, DNS_PACKET_HEADER
+from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, INTERNAL_HTTP_PACKET_HEADER
 
 
 # Fragment packet header identifier
@@ -68,7 +69,8 @@ PACKET_HEADERS: dict[str, Union[Packet, SSUPacket, SSUControlPacket]] = {
     SSU_CONTROL_HEADER: SSUControlPacket,
     SSU_PACKET_HEADER: SSUPacket,
     DNS_PACKET_HEADER: DNSPacket,
-    SSU_FRAGMENT_HEADER: SSUFragmentPacket
+    SSU_FRAGMENT_HEADER: SSUFragmentPacket,
+    INTERNAL_HTTP_PACKET_HEADER: InternalHTTPPacket
 }
 
 # Configuration keys for SSU Node settings

@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+import asyncio
 from typing import Optional
 from datetime import datetime
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
@@ -8,6 +9,9 @@ from lib.VoxaCommunications_Router.registry.client import RegistryClient
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.cryptography.keymanager import KeyManager
 from lib.VoxaCommunications_Router.net.net_manager import NetManager, get_global_net_manager
+from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket
+from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
+from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from lib.VoxaCommunications_Router.util.ri_utils import fetch_ri, save_ri
 from lib.compression import JSONCompressor
 from stores.registrycontroller import get_global_registry_manager, set_global_registry_manager
@@ -26,6 +30,7 @@ class RIManager:
         self.settings = read_json_from_namespace("config.settings") or {}
         self.features: dict = self.settings.get("features", {})
         self.p2p_settings = read_json_from_namespace("config.p2p") or {}
+        self.bootstrap_nodes: list = self.p2p_settings.get("bootstrap-nodes", [])
         self.data_dir: str = self.storage_config.get("data-dir", "data/")
         self.sub_dirs: dict = dict(self.storage_config.get("sub-dirs", {}))
         self.local_dir: str = os.path.join(self.data_dir, self.sub_dirs.get("local", "local/"))
@@ -85,6 +90,25 @@ class RIManager:
                 feature: str = feature.replace("enable-", "")
                 features_list.append(feature)
         return features_list
+    
+    async def fetch_bootstrap_ri_async(self, path: Optional[str] = "rri"):
+        net_manager: NetManager = get_global_net_manager()
+        if not net_manager.ssu_node:
+            raise RuntimeError("SSU Node is not running. Cannot fetch bootstrap RI.")
+        ssu_node: SSUNode = net_manager.ssu_node
+        for node_addr in self.bootstrap_nodes:
+            packet: InternalHTTPPacket = InternalHTTPPacket(
+                addr=node_addr,
+                method="GET",
+                endpoint=f"/data/fetch_{path}"
+            )
+            packet.build_data()
+            packet.str_to_raw()
+            ssu_request: SSURequest = packet.upgrade_to_ssu_request(generate_request_id=True)
+            response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=5)
+
+    def fetch_bootstrap_ri(self, path: Optional[str] = "rri"):
+        asyncio.run(self.fetch_bootstrap_ri_async(path))
 
     def initialize_node(self):
         net_manager: NetManager = get_global_net_manager()
