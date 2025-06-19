@@ -73,7 +73,7 @@ def fetch_ri(file_name, path: Optional[str] = "local") -> dict:
     }
 
 @benchmark(name="ri_utils.save_ri", collector=benchmark_collector)
-def save_ri(file_name: str, data: Dict[Any, Any], path: Optional[str] = "local") -> dict:
+def save_ri(file_name: str, data: Dict[Any, Any], path: Optional[str] = "local", allow_duplicates: Optional[bool] = False) -> dict:
     """
     Save Node Routing Information (NRI) to local storage with compression.
     
@@ -81,6 +81,7 @@ def save_ri(file_name: str, data: Dict[Any, Any], path: Optional[str] = "local")
         file_name (str): Name of the file to save (without extension)
         data (Dict[Any, Any]): The NRI data to save
         path (str, optional): Storage path subdirectory. Defaults to "local".
+        allow_duplicates (bool, optional): Allow saving if duplicate node_id/relay_id exists. Defaults to False.
         
     Returns:
         dict: Response with success status and file information
@@ -114,6 +115,36 @@ def save_ri(file_name: str, data: Dict[Any, Any], path: Optional[str] = "local")
                 "success": False,
                 "error": f"Failed to create directory: {e}"
             }
+    
+    # Check for duplicates if not allowed
+    if not allow_duplicates:
+        logger.debug("Checking for duplicate node_id/relay_id")
+        
+        # Determine which ID field to check based on path
+        id_field = "relay_id" if path == "rri" else "node_id"
+        
+        # Get the ID value from the data
+        if id_field not in data:
+            logger.error(f"Required field '{id_field}' not found in data")
+            return {
+                "success": False,
+                "error": f"Required field '{id_field}' not found in data"
+            }
+        
+        id_value = data[id_field]
+        
+        # Load all existing RI files to check for duplicates
+        existing_ri_data = load_all_ri(path=path)
+        
+        # Check if the ID already exists in any file
+        for existing_file_name, existing_data in existing_ri_data.items():
+            if existing_data.get(id_field) == id_value and existing_file_name != file_name:
+                logger.warning(f"Duplicate {id_field} found: {id_value} in file {existing_file_name}")
+                return {
+                    "success": False,
+                    "duplicate": True,
+                    "error": f"Duplicate {id_field} '{id_value}' already exists in file '{existing_file_name}'"
+                }
     
     # Initialize the compressor
     compressor = JSONCompressor()
