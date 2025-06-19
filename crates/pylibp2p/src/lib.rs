@@ -10,7 +10,6 @@ use libp2p::{
     PeerId, Multiaddr, Transport,
     core::upgrade::Version,
     identity::Keypair,
-    StreamProtocol,
 };
 use libp2p_noise as noise;
 use libp2p_yamux as yamux;
@@ -18,7 +17,6 @@ use libp2p_ping as ping;
 use libp2p_identify as identify;
 use libp2p_kad::{self as kad, store::MemoryStore};
 use libp2p_gossipsub as gossipsub;
-use libp2p_request_response as request_response;
 use libp2p_mdns as mdns;
 use libp2p_tcp as tcp;
 use libp2p_websocket as websocket;
@@ -29,96 +27,6 @@ use std::collections::HashMap;
 use futures::prelude::*;
 use tokio::runtime::Runtime;
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GenericProtocol(String);
-
-impl AsRef<[u8]> for GenericProtocol {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_bytes()
-    }
-}
-
-impl From<String> for GenericProtocol {
-    fn from(s: String) -> Self {
-        GenericProtocol(s)
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct GenericCodec;
-
-impl request_response::Codec for GenericCodec {
-    type Protocol = StreamProtocol;
-    type Request = Vec<u8>;
-    type Response = Vec<u8>;
-
-    async fn read_request<T>(
-        &mut self,
-        _protocol: &Self::Protocol,
-        io: &mut T,
-    ) -> std::io::Result<Self::Request>
-    where
-        T: AsyncRead + Unpin + Send,
-    {
-        use futures::io::AsyncReadExt;
-        let mut length_bytes = [0u8; 4];
-        io.read_exact(&mut length_bytes).await?;
-        let length = u32::from_be_bytes(length_bytes) as usize;
-        
-        if length > 1024 * 1024 { // 1MB limit
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Message too large"
-            ));
-        }
-        
-        let mut buffer = vec![0u8; length];
-        io.read_exact(&mut buffer).await?;
-        Ok(buffer)
-    }
-
-    async fn read_response<T>(
-        &mut self,
-        protocol: &Self::Protocol,
-        io: &mut T,
-    ) -> std::io::Result<Self::Response>
-    where
-        T: AsyncRead + Unpin + Send,
-    {
-        self.read_request(protocol, io).await
-    }
-
-    async fn write_request<T>(
-        &mut self,
-        _protocol: &Self::Protocol,
-        io: &mut T,
-        req: Self::Request,
-    ) -> std::io::Result<()>
-    where
-        T: AsyncWrite + Unpin + Send,
-    {
-        use futures::io::AsyncWriteExt;
-        let length = req.len() as u32;
-        io.write_all(&length.to_be_bytes()).await?;
-        io.write_all(&req).await?;
-        io.flush().await?;
-        Ok(())
-    }
-
-    async fn write_response<T>(
-        &mut self,
-        protocol: &Self::Protocol,
-        io: &mut T,
-        res: Self::Response,
-    ) -> std::io::Result<()>
-    where
-        T: AsyncWrite + Unpin + Send,
-    {
-        self.write_request(protocol, io, res).await
-    }
-}
 
 #[pyclass]
 #[derive(Debug, Clone)]
@@ -136,12 +44,11 @@ pub struct CustomSwarmEvent {
 }
 
 #[derive(NetworkBehaviour)]
-struct ComprehensiveBehaviour {
+struct CoreBehaviour {
     ping: ping::Behaviour,
     identify: identify::Behaviour,
     kademlia: kad::Behaviour<MemoryStore>,
     gossipsub: gossipsub::Behaviour,
-    request_response: request_response::Behaviour<GenericCodec>,
     mdns: mdns::async_io::Behaviour,
     dcutr: dcutr::Behaviour,
     autonat: autonat::Behaviour,
@@ -149,7 +56,7 @@ struct ComprehensiveBehaviour {
 
 #[pyclass]
 pub struct Libp2pNode {
-    swarm: Arc<Mutex<Option<Swarm<ComprehensiveBehaviour>>>>,
+    swarm: Arc<Mutex<Option<Swarm<CoreBehaviour>>>>,
     local_peer_id: PeerId,
     runtime: Arc<Runtime>,
     event_queue: Arc<Mutex<Vec<CustomSwarmEvent>>>,
@@ -204,7 +111,7 @@ impl Libp2pNode {
         kad_config.set_replication_factor(20.try_into().unwrap());
 
         // Create behaviours
-        let behaviour = ComprehensiveBehaviour {
+        let behaviour = CoreBehaviour {
             ping: ping::Behaviour::new(ping::Config::new().with_interval(Duration::from_secs(30))),
             identify: identify::Behaviour::new(identify::Config::new("/voxa/1.0.0".to_string(), local_key.public())),
             kademlia: kad::Behaviour::with_config(local_peer_id, MemoryStore::new(local_peer_id), kad_config),
@@ -216,10 +123,6 @@ impl Libp2pNode {
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?,
             dcutr: dcutr::Behaviour::new(local_peer_id),
             autonat: autonat::Behaviour::new(local_peer_id, autonat::Config::default()),
-            request_response: request_response::Behaviour::new(
-                [(StreamProtocol::new("/voxa/req-resp/1.0.0"), request_response::ProtocolSupport::Full)],
-                request_response::Config::default()
-            ),
         };
 
         let swarm_config = libp2p::swarm::Config::with_tokio_executor()
@@ -299,18 +202,6 @@ impl Libp2pNode {
                 if !result {
                     return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Failed to unsubscribe from topic"));
                 }
-            }
-        }
-        Ok(())
-    }
-
-    fn send_request(&self, peer_id: String, data: Vec<u8>) -> PyResult<()> {
-        let peer: PeerId = peer_id.parse()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid peer ID: {}", e)))?;
-        
-        if let Ok(mut swarm_guard) = self.swarm.lock() {
-            if let Some(ref mut swarm) = *swarm_guard {
-                swarm.behaviour_mut().request_response.send_request(&peer, data);
             }
         }
         Ok(())
@@ -528,6 +419,28 @@ impl Libp2pNode {
         Ok(())
     }
 
+    fn put_record(&self, key: Vec<u8>, value: Vec<u8>) -> PyResult<()> {
+        if let Ok(mut swarm_guard) = self.swarm.lock() {
+            if let Some(ref mut swarm) = *swarm_guard {
+                let record_key = kad::RecordKey::new(&key);
+                let record = kad::Record::new(record_key, value);
+                swarm.behaviour_mut().kademlia.put_record(record, kad::Quorum::One)
+                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn get_record(&self, key: Vec<u8>) -> PyResult<()> {
+        if let Ok(mut swarm_guard) = self.swarm.lock() {
+            if let Some(ref mut swarm) = *swarm_guard {
+                let record_key = kad::RecordKey::new(&key);
+                swarm.behaviour_mut().kademlia.get_record(record_key);
+            }
+        }
+        Ok(())
+    }
+
     fn get_network_info(&self) -> HashMap<String, String> {
         let mut info = HashMap::new();
         info.insert("peer_id".to_string(), self.local_peer_id.to_string());
@@ -536,6 +449,68 @@ impl Libp2pNode {
         info.insert("external_addresses".to_string(), self.get_external_addresses().len().to_string());
         info.insert("running".to_string(), self.is_running().to_string());
         info
+    }
+
+    fn get_supported_protocols(&self) -> Vec<String> {
+        vec![
+            "/ipfs/ping/1.0.0".to_string(),
+            "/ipfs/id/1.0.0".to_string(),
+            "/ipfs/kad/1.0.0".to_string(),
+            "/meshsub/1.1.0".to_string(),
+            "/meshsub/1.0.0".to_string(),
+            "/libp2p/autonat/1.0.0".to_string(),
+            "/libp2p/circuit/relay/0.2.0/hop".to_string(),
+            "/libp2p/dcutr".to_string(),
+        ]
+    }
+
+    fn close_connection(&self, peer_id: String) -> PyResult<()> {
+        let peer: PeerId = peer_id.parse()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid peer ID: {}", e)))?;
+        
+        if let Ok(mut swarm_guard) = self.swarm.lock() {
+            if let Some(ref mut swarm) = *swarm_guard {
+                swarm.disconnect_peer_id(peer);
+            }
+        }
+        Ok(())
+    }
+
+    fn ban_peer(&self, peer_id: String) -> PyResult<()> {
+        let peer: PeerId = peer_id.parse()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid peer ID: {}", e)))?;
+        
+        if let Ok(mut swarm_guard) = self.swarm.lock() {
+            if let Some(ref mut swarm) = *swarm_guard {
+                // In newer libp2p versions, banning is handled through connection management
+                // We'll disconnect and add to a local ban list if needed
+                let _ = swarm.disconnect_peer_id(peer);
+                // Note: Actual banning would require maintaining a local ban list
+                // and checking it during connection establishment
+            }
+        }
+        Ok(())
+    }
+
+    fn unban_peer(&self, peer_id: String) -> PyResult<()> {
+        let _peer: PeerId = peer_id.parse()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid peer ID: {}", e)))?;
+        
+        // In newer libp2p versions, unbanning would involve removing from local ban list
+        // This is a placeholder implementation
+        Ok(())
+    }
+
+    fn is_connected(&self, peer_id: String) -> PyResult<bool> {
+        let peer: PeerId = peer_id.parse()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid peer ID: {}", e)))?;
+        
+        if let Ok(swarm_guard) = self.swarm.lock() {
+            if let Some(ref swarm) = *swarm_guard {
+                return Ok(swarm.is_connected(&peer));
+            }
+        }
+        Ok(false)
     }
 }
 
