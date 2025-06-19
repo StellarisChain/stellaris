@@ -14,6 +14,7 @@ todo.txt
 testoutput
 *.out
 benchmarks
+target
 # Pre-Production files
 *.test.py
 json-loader.sh
