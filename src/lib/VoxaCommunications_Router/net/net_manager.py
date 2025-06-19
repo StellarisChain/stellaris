@@ -8,6 +8,7 @@ from libp2p import IHost, new_host
 from typing import Optional, Any
 from lib.VoxaCommunications_Router.util.net_utils import get_program_ports
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
+from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
 from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, INTERNAL_HTTP_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.dns.dns_manager import DNSManager, set_global_dns_manager
 from util.logging import log
@@ -46,7 +47,9 @@ class NetManager:
     async def handle_internal_http_packet(self, packet: InternalHTTPPacket) -> None:
         """Handle incoming internal HTTP packets."""
         self.logger.info(f"Handling Internal HTTP Packet: {packet}")
-        return None
+        return SSUPacket(
+            str_data="ack"
+        )
     
     async def setup_libp2p(self) -> None:
         """Set up the P2P host."""

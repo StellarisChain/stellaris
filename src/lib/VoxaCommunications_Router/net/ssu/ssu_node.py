@@ -213,7 +213,25 @@ class SSUNode:
                             try:
                                 packet: Union[Packet, SSUPacket, SSUControlPacket, InternalHTTPPacket] = attempt_upgrade(packet)
                                 self.logger.info(f"Executing packet hook for header {header}")
-                                self.loop.create_task(hook(packet))
+                                # self.loop.create_task(hook(packet))  # Run hook asynchronously
+
+                                result = await hook(packet)
+                                
+                                # If hook returns a packet, send it back
+                                if isinstance(result, SSURequest):
+                                    result.addr = addr  # Ensure it goes back to sender
+                                    await self.send_ssu_request(result)
+                                    self.logger.info(f"Sent SSURequest response from hook for header {header}")
+                                elif isinstance(result, (SSUPacket, SSUControlPacket, Packet, InternalHTTPPacket)):
+                                    # Rawdog the packet handling
+                                    result.addr = addr  # Ensure it goes back to sender
+                                    if not result.has_header(packet_to_header(result)):
+                                        result.assemble_header(packet_to_header(result))
+                                    if not result.raw_data:
+                                        result.str_to_raw()
+                                    self.sock.sendto(result.raw_data, addr)
+                                    self.logger.info(f"Sent packet response from hook for header {header}")
+                                    
                             except Exception as e:
                                 self.logger.error(f"Error executing packet hook for {header}: {e}")
 
