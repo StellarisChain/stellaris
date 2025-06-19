@@ -29,7 +29,7 @@ class RIManager:
         self.settings = read_json_from_namespace("config.settings") or {}
         self.features: dict = self.settings.get("features", {})
         self.p2p_settings = read_json_from_namespace("config.p2p") or {}
-        self.bootstrap_nodes: list = self.p2p_settings.get("bootstrap-nodes", [])
+        self.bootstrap_nodes: list = self.p2p_settings.get("bootstrap_nodes", [])
         self.data_dir: str = self.storage_config.get("data-dir", "data/")
         self.sub_dirs: dict = dict(self.storage_config.get("sub-dirs", {}))
         self.local_dir: str = os.path.join(self.data_dir, self.sub_dirs.get("local", "local/"))
@@ -108,8 +108,23 @@ class RIManager:
             response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=50)
 
     def fetch_bootstrap_ri(self, path: Optional[str] = "rri"):
-        self.logger.debug("Fetching bootstrap RI")
-        asyncio.run(self.fetch_bootstrap_ri_async(path))
+        self.logger.info("Fetching bootstrap RI")
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        try:
+            # Run the async task and wait for it to complete
+            loop.run_until_complete(self.fetch_bootstrap_ri_async(path))
+            self.logger.debug("Bootstrap RI fetch completed successfully")
+        except Exception as e:
+            self.logger.error(f"Error fetching bootstrap RI: {e}")
+            raise
 
     def initialize_node(self):
         net_manager: NetManager = get_global_net_manager()

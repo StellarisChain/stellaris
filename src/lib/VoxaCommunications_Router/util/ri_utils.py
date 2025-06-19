@@ -131,7 +131,7 @@ def save_ri(file_name: str, data: Dict[Any, Any], path: Optional[str] = "local",
                 "error": f"Required field '{id_field}' not found in data"
             }
         
-        id_value = data[id_field]
+        id_value = data.get(id_field)
         
         # Load all existing RI files to check for duplicates
         existing_ri_data = load_all_ri(path=path)
