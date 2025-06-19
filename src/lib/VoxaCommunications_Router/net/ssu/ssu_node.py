@@ -82,6 +82,7 @@ class SSUNode:
         and starts the UDP packet handling loop.
         """
         self.running = True
+        self.logger = log()
         
         # Create and bind UDP socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -90,7 +91,7 @@ class SSUNode:
 
         # Start the UDP handling task
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-        self.loop.create_task(self.handle_udp())
+        await self.handle_udp()
     
     async def stop(self):
         """

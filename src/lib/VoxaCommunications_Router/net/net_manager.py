@@ -116,14 +116,28 @@ class NetManager:
         self.logger.info("Setting up SSU Node")
         self.ssu_node = SSUNode(config=self.p2p_config)
     
-    def serve_ssu_node(self) -> None:
+    def serve_ssu_node(self) -> asyncio.Task:
         """Start the SSU node server."""
         if not self.ssu_node:
             self.logger.error("SSU Node not set up. Call setup_ssu_node() first.")
-            return
+            return None
         
-        asyncio.run(self.ssu_node.serve())
-        self.logger.info("SSU Node server started")
+        self.logger.info("Starting SSU Node server...")
+        
+        # Create task in the existing event loop instead of blocking
+        task = self.loop.create_task(self.ssu_node.serve())
+        
+        # Add a callback to log when the task actually starts
+        def on_task_done(task_result: asyncio.Task) -> None:
+            if task_result.exception():
+                self.logger.error(f"SSU Node server task failed: {task_result.exception()}")
+            else:
+                self.logger.info("SSU Node server task completed")
+        
+        task.add_done_callback(on_task_done)
+        self.logger.info("SSU Node server task created and scheduled")
+        
+        return task
 
     def setup_dns_manager(self) -> None:
         """Initialize the DNS manager."""

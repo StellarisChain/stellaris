@@ -5,6 +5,7 @@ import random
 import argparse
 import sys
 import shutil
+import asyncio
 import os
 import json
 import traceback
@@ -60,9 +61,35 @@ def setup_registry_manager() -> None:
     pass
 
 def bootstrap_ri() -> None:
+    # Create event loop if needed
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
     net_manager: NetManager = NetManager()
     net_manager.setup_ssu_node()
-    net_manager.serve_ssu_node()
+    
+    # Start the SSU Node server task
+    print("Starting SSU Node server...")
+    ssu_task = net_manager.serve_ssu_node()
+    
+    if ssu_task:
+        # Give the SSU Node time to initialize and bind to socket
+        print("Waiting for SSU Node to initialize...")
+        loop.run_until_complete(asyncio.sleep(1.0))
+        
+        # Check if the task started successfully
+        if not ssu_task.done():
+            print("SSU Node started successfully and is running in background")
+        elif ssu_task.exception():
+            print(f"SSU Node failed to start: {ssu_task.exception()}")
+            return
+    
     set_global_net_manager(net_manager)
     registry_manager: RegistryManager = RegistryManager(client_type="node")
     set_global_registry_manager(registry_manager)
@@ -72,6 +99,22 @@ def bootstrap_ri() -> None:
         ri_manager.initialize()
     ri_manager.fetch_bootstrap_ri(path="rri")
     
+    # Keep the program running with the SSU Node server
+    if ssu_task and not ssu_task.done():
+        print("Bootstrap complete. SSU Node is running. Press Ctrl+C to stop.")
+        try:
+            loop.run_forever()
+        except KeyboardInterrupt:
+            print("\nReceived interrupt signal, shutting down...")
+            ssu_task.cancel()
+            try:
+                loop.run_until_complete(asyncio.wait_for(ssu_task, timeout=2.0))
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            print("Shutdown complete.")
+    else:
+        print("SSU Node task completed unexpectedly")
+
 # Clear your RRI after doing this, if you are using a production environment
 def generate_test_rri_data(count: int = 10) -> None:
     for _ in range(count):
