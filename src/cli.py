@@ -13,17 +13,20 @@ import io
 from copy import deepcopy
 from typing import Optional
 from lib.VoxaCommunications_Router.util.ri_utils import save_ri
+from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
+from lib.VoxaCommunications_Router.ri.ri_manager import RIManager
 from lib.VoxaCommunications_Router.ri.generate_maps import generate_relay_map
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.routing.routing_map import RoutingMap
 from lib.VoxaCommunications_Router.routing.request import Request
 from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector, encrypt_routing_chain, encrypt_routing_chain_threaded, encrypt_routing_chain_sequential_batched, decrypt_routing_chain_block_previous, decrypt_routing_chain_block
 from lib.VoxaCommunications_Router.net.net_interface import send_request, request_factory
+from lib.VoxaCommunications_Router.net.net_manager import NetManager, set_global_net_manager
 from schema.RRISchema import RRISchema
+from stores.registrycontroller import get_global_registry_manager, set_global_registry_manager
 from util.filereader import save_key_file, read_key_file
 from util.jsonreader import read_json_from_namespace
 from util.wrappers import deprecated
-from main import app
 
 __version__ = "0.1.0-TEST"
 
@@ -52,6 +55,22 @@ def create_test_rri(relay_ip: str, relay_port: Optional[int] = None) -> None:
     ).dict()
     save_ri(rri_data["relay_id"], rri_data, "rri")
     save_key_file(rri_data["relay_id"], private_key, "rri")
+
+def setup_registry_manager() -> None:
+    pass
+
+def bootstrap_ri() -> None:
+    net_manager: NetManager = NetManager()
+    net_manager.setup_ssu_node()
+    net_manager.serve_ssu_node()
+    set_global_net_manager(net_manager)
+    registry_manager: RegistryManager = RegistryManager(client_type="node")
+    set_global_registry_manager(registry_manager)
+    ri_manager: RIManager = RIManager(type="node")
+    ri_manager.check_initialization()
+    if not ri_manager.initialized:
+        ri_manager.initialize()
+    ri_manager.fetch_bootstrap_ri(path="rri")
     
 # Clear your RRI after doing this, if you are using a production environment
 def generate_test_rri_data(count: int = 10) -> None:
@@ -270,6 +289,9 @@ if __name__ == "__main__":
     # RRI subparser
     rri_parser: argparse.ArgumentParser = subparsers.add_parser('rri', help='RRI-related test data generation')
     rri_subparsers = rri_parser.add_subparsers(dest='rri_command', help='RRI commands')
+
+    # RRI bootstrap subcommand
+    rri_bootstrap_parser: argparse.ArgumentParser = rri_subparsers.add_parser('bootstrap', help='Bootstrap RRI data')
     
     # RRI data generation subcommand
     rri_data_parser: argparse.ArgumentParser = rri_subparsers.add_parser('generate', help='Generate test RRI data entries')
@@ -324,6 +346,9 @@ if __name__ == "__main__":
         if args.rri_command == 'generate':
             generate_test_rri_data(args.count)
             print(f"Generated {args.count} test RRI entries.")
+        elif args.rri_command == 'bootstrap':
+            print("Bootstrapping RRI data...")
+            bootstrap_ri()
         elif args.rri_command == 'map':
             generate_test_rri_map(benchmark=args.benchmark, method=args.method, max_map_size=args.mapsize, testdecrypt=args.testdecrypt)
         elif args.rri_command == 'decrypt':
@@ -352,6 +377,7 @@ if __name__ == "__main__":
                 "port": args.port,
                 "reload": args.reload
             }
+            from main import app
             uvicorn.run(app, host=config.get("host"), port=config.get("port"), reload=config.get("reload", False))
         else:
             app_parser.print_help()

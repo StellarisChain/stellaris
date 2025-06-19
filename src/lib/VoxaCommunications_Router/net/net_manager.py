@@ -122,7 +122,7 @@ class NetManager:
             self.logger.error("SSU Node not set up. Call setup_ssu_node() first.")
             return
         
-        self.loop.create_task(self.ssu_node.serve())
+        asyncio.run(self.ssu_node.serve())
         self.logger.info("SSU Node server started")
 
     def setup_dns_manager(self) -> None:

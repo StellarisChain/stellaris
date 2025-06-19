@@ -19,7 +19,6 @@ from schema.RRISchema import RRISchema
 from schema.NRISchema import NRISchema
 from util.jsonreader import read_json_from_namespace
 from util.logging import log
-from src import __version__
 
 class RIManager:
     def __init__(self, type: Optional[str] = "node"):
@@ -97,6 +96,7 @@ class RIManager:
             raise RuntimeError("SSU Node is not running. Cannot fetch bootstrap RI.")
         ssu_node: SSUNode = net_manager.ssu_node
         for node_addr in self.bootstrap_nodes:
+            self.logger.debug(f"Fetching bootstrap RI from {node_addr}")
             packet: InternalHTTPPacket = InternalHTTPPacket(
                 addr=node_addr,
                 method="GET",
@@ -105,9 +105,10 @@ class RIManager:
             packet.build_data()
             packet.str_to_raw()
             ssu_request: SSURequest = packet.upgrade_to_ssu_request(generate_request_id=True)
-            response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=5)
+            response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=50)
 
     def fetch_bootstrap_ri(self, path: Optional[str] = "rri"):
+        self.logger.debug("Fetching bootstrap RI")
         asyncio.run(self.fetch_bootstrap_ri_async(path))
 
     def initialize_node(self):
@@ -134,6 +135,7 @@ class RIManager:
         ).dict()
         nri_data["created_at"] = datetime.utcnow().isoformat()
         nri_data["last_updated"] = datetime.utcnow().isoformat()
+        from src import __version__
         nri_data["version"] = str(__version__)
         json_data = json.dumps(nri_data, indent=2, ensure_ascii=False)
         save_ri("nri", json_data, path="local")
