@@ -89,7 +89,8 @@ def bootstrap_ri() -> None:
         elif ssu_task.exception():
             print(f"SSU Node failed to start: {ssu_task.exception()}")
             return
-    
+    net_manager.setup_internal_http() # Used with the testing bootstrap of localhost:9000, which would route to itself
+
     set_global_net_manager(net_manager)
     registry_manager: RegistryManager = RegistryManager(client_type="node")
     set_global_registry_manager(registry_manager)

@@ -65,12 +65,12 @@ class SSUFragmentPacket(Packet):
         except json.JSONDecodeError:
             return None
 
-PACKET_HEADERS: dict[str, Union[Packet, SSUPacket, SSUControlPacket]] = {
+PACKET_HEADERS: dict[str, Union[Packet, SSUPacket, SSUControlPacket, SSUFragmentPacket, InternalHTTPPacket]] = {
     SSU_CONTROL_HEADER: SSUControlPacket,
-    SSU_PACKET_HEADER: SSUPacket,
     DNS_PACKET_HEADER: DNSPacket,
     SSU_FRAGMENT_HEADER: SSUFragmentPacket,
-    INTERNAL_HTTP_PACKET_HEADER: InternalHTTPPacket
+    INTERNAL_HTTP_PACKET_HEADER: InternalHTTPPacket,
+    SSU_PACKET_HEADER: SSUPacket # Keep this as the last entry to ensure it is the default
 }
 
 # Configuration keys for SSU Node settings
@@ -89,7 +89,7 @@ SSU_NODE_CONFIG_DEFAULT_VALUES: list[str] = [
     10
 ]
 
-def attempt_upgrade(packet: Packet) -> Union[Packet, SSUPacket, SSUControlPacket]:
+def attempt_upgrade(packet: Packet) -> Union[Packet, SSUPacket, SSUControlPacket, InternalHTTPPacket]:
     """
     Attempt to upgrade a Packet to a more specific type based on its header.
     This function checks the packet's header and returns an instance of the
@@ -100,7 +100,7 @@ def attempt_upgrade(packet: Packet) -> Union[Packet, SSUPacket, SSUControlPacket
         Union[Packet, SSUPacket, SSUControlPacket]: The upgraded packet instance
     """
     header: str = packet.get_header()
-    packet_type: Union[Packet, SSUPacket, SSUControlPacket] = PACKET_HEADERS.get(header, Packet)
+    packet_type: Union[Packet, SSUPacket, SSUControlPacket, InternalHTTPPacket] = PACKET_HEADERS.get(header, Packet)
     return packet_type(**packet.dict())
 
 def packet_to_header(packet: Packet) -> str:

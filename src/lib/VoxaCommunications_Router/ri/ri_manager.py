@@ -9,9 +9,10 @@ from lib.VoxaCommunications_Router.registry.client import RegistryClient
 from lib.VoxaCommunications_Router.cryptography.keyutils import RSAKeyGenerator
 from lib.VoxaCommunications_Router.cryptography.keymanager import KeyManager
 from lib.VoxaCommunications_Router.net.net_manager import NetManager, get_global_net_manager
-from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket
+from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, INTERNAL_HTTP_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
+from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSU_PACKET_HEADER
 from lib.VoxaCommunications_Router.util.ri_utils import fetch_ri, save_ri
 from lib.compression import JSONCompressor
 from stores.registrycontroller import get_global_registry_manager, set_global_registry_manager
@@ -104,6 +105,10 @@ class RIManager:
             )
             packet.build_data()
             packet.str_to_raw()
+            if packet.has_header(SSU_PACKET_HEADER):
+                self.logger.warning("Packet already has SSU header, removing it to prevent conflicts")
+                packet.remove_header()
+            packet.assemble_header(INTERNAL_HTTP_PACKET_HEADER)
             ssu_request: SSURequest = packet.upgrade_to_ssu_request(generate_request_id=True)
             response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=50)
 
@@ -152,8 +157,7 @@ class RIManager:
         nri_data["last_updated"] = datetime.utcnow().isoformat()
         from src import __version__
         nri_data["version"] = str(__version__)
-        json_data = json.dumps(nri_data, indent=2, ensure_ascii=False)
-        save_ri("nri", json_data, path="local")
+        save_ri("nri", nri_data, path="local")
         key_manager.save_hybrid_keys() # Have to do this after the file is written, since it uses the file to save the keys, eventhough they are alreadt saved
         self.logger.info(f"Successfully initialized node with NRI data")
 

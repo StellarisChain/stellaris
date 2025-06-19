@@ -13,6 +13,7 @@
 
     ],
     "bootstrap_nodes": [
+        "localhost:9000",
         "bootstrap.connor33341.dev:8999"
     ],
     "replication_factor": 3,

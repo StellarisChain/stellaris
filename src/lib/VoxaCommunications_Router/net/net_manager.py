@@ -8,6 +8,7 @@ from libp2p import IHost, new_host
 from typing import Optional, Any
 from lib.VoxaCommunications_Router.util.net_utils import get_program_ports
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
+from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, INTERNAL_HTTP_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.dns.dns_manager import DNSManager, set_global_dns_manager
 from util.logging import log
 from util.envutils import detect_container
@@ -34,6 +35,18 @@ class NetManager:
         self.ip_info: tuple[str, Any, Any] = get_ip_info(stun_host=random.choice(self.stun_servers)) # Probably not the best way to do this, but it works for now
         self.nat_type: Optional[str] = self.ip_info[0] if self.ip_info else None
         self.logger.warning(f"Detected NAT type: {self.nat_type}")
+
+    # Takes UDP packets and sends them to legacy HTTP endpoints
+    def setup_internal_http(self) -> None:
+        """Set up the internal HTTP packet handler."""
+        self.logger.info("Setting up Internal HTTP Packet handler")
+        self.ssu_node.bind_hook(INTERNAL_HTTP_PACKET_HEADER, self.handle_internal_http_packet)
+        self.logger.info("Internal HTTP Packet handler set up successfully")
+
+    async def handle_internal_http_packet(self, packet: InternalHTTPPacket) -> None:
+        """Handle incoming internal HTTP packets."""
+        self.logger.info(f"Handling Internal HTTP Packet: {packet}")
+        return None
     
     async def setup_libp2p(self) -> None:
         """Set up the P2P host."""

@@ -7,6 +7,7 @@ from copy import deepcopy
 from lib.VoxaCommunications_Router.net.packet import Packet
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket, SSU_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
+from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket
 from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket, SSU_CONTROL_HEADER
 from lib.VoxaCommunications_Router.net.dns.dns_packet import DNSPacket, DNS_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.ssu.ssu_utils import attempt_upgrade, packet_to_header, PACKET_HEADERS, SSU_NODE_CONFIG_KEYS, SSU_NODE_CONFIG_DEFAULT_VALUES, SSUFragmentPacket, SSU_FRAGMENT_HEADER, MAX_UDP_PACKET_SIZE, FRAGMENT_TIMEOUT
@@ -210,7 +211,7 @@ class SSUNode:
                     for header, hook in self.packet_hooks.items():
                         if packet.get_header() == header:
                             try:
-                                packet: Union[Packet, SSUPacket, SSUControlPacket] = attempt_upgrade(packet)
+                                packet: Union[Packet, SSUPacket, SSUControlPacket, InternalHTTPPacket] = attempt_upgrade(packet)
                                 self.logger.info(f"Executing packet hook for header {header}")
                                 self.loop.create_task(hook(packet))
                             except Exception as e:
@@ -284,8 +285,9 @@ class SSUNode:
             return
         
         # Ensure the request has a header
-        has_header: bool = request.payload.has_header()
+        has_header: bool = request.payload.has_header(packet_to_header(request.payload))
         if not has_header:
+            self.logger.warning(f"Request payload has no header, assembling header. {packet_to_header(request.payload)}")
             request.payload.assemble_header(packet_to_header(request.payload))
             
         # Ensure payload is in raw format for transmission
