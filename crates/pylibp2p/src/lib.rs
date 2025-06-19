@@ -470,7 +470,7 @@ impl Libp2pNode {
         
         if let Ok(mut swarm_guard) = self.swarm.lock() {
             if let Some(ref mut swarm) = *swarm_guard {
-                swarm.disconnect_peer_id(peer);
+                let _ = swarm.disconnect_peer_id(peer);
             }
         }
         Ok(())
