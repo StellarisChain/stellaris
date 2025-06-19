@@ -5,7 +5,7 @@ from lib.VoxaCommunications_Router.net.packet import Packet
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket, SSU_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket, SSU_CONTROL_HEADER
 from lib.VoxaCommunications_Router.net.dns.dns_packet import DNSPacket, DNS_PACKET_HEADER
-from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, INTERNAL_HTTP_PACKET_HEADER
+from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, INTERNAL_HTTP_PACKET_HEADER, InternalHTTPPacketResponse, INTERNAL_HTTP_PACKET_RESPONSE_HEADER
 
 
 # Fragment packet header identifier
@@ -65,11 +65,12 @@ class SSUFragmentPacket(Packet):
         except json.JSONDecodeError:
             return None
 
-PACKET_HEADERS: dict[str, Union[Packet, SSUPacket, SSUControlPacket, SSUFragmentPacket, InternalHTTPPacket]] = {
+PACKET_HEADERS: dict[str, Union[Packet, SSUPacket, SSUControlPacket, SSUFragmentPacket, InternalHTTPPacket, InternalHTTPPacketResponse]] = {
     SSU_CONTROL_HEADER: SSUControlPacket,
     DNS_PACKET_HEADER: DNSPacket,
     SSU_FRAGMENT_HEADER: SSUFragmentPacket,
     INTERNAL_HTTP_PACKET_HEADER: InternalHTTPPacket,
+    INTERNAL_HTTP_PACKET_RESPONSE_HEADER: InternalHTTPPacketResponse,
     SSU_PACKET_HEADER: SSUPacket # Keep this as the last entry to ensure it is the default
 }
 
@@ -89,7 +90,7 @@ SSU_NODE_CONFIG_DEFAULT_VALUES: list[str] = [
     10
 ]
 
-def attempt_upgrade(packet: Packet) -> Union[Packet, SSUPacket, SSUControlPacket, InternalHTTPPacket]:
+def attempt_upgrade(packet: Packet) -> Union[Packet, SSUPacket, SSUControlPacket, InternalHTTPPacket, InternalHTTPPacketResponse]:
     """
     Attempt to upgrade a Packet to a more specific type based on its header.
     This function checks the packet's header and returns an instance of the
@@ -100,7 +101,7 @@ def attempt_upgrade(packet: Packet) -> Union[Packet, SSUPacket, SSUControlPacket
         Union[Packet, SSUPacket, SSUControlPacket]: The upgraded packet instance
     """
     header: str = packet.get_header()
-    packet_type: Union[Packet, SSUPacket, SSUControlPacket, InternalHTTPPacket] = PACKET_HEADERS.get(header, Packet)
+    packet_type: Union[Packet, SSUPacket, SSUControlPacket, InternalHTTPPacket, InternalHTTPPacketResponse] = PACKET_HEADERS.get(header, Packet)
     return packet_type(**packet.dict())
 
 def packet_to_header(packet: Packet) -> str:

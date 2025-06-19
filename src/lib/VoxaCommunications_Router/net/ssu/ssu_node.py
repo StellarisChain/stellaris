@@ -7,7 +7,7 @@ from copy import deepcopy
 from lib.VoxaCommunications_Router.net.packet import Packet
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket, SSU_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
-from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket
+from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, InternalHTTPPacketResponse
 from lib.VoxaCommunications_Router.net.ssu.ssu_control_packet import SSUControlPacket, SSU_CONTROL_HEADER
 from lib.VoxaCommunications_Router.net.dns.dns_packet import DNSPacket, DNS_PACKET_HEADER
 from lib.VoxaCommunications_Router.net.ssu.ssu_utils import attempt_upgrade, packet_to_header, PACKET_HEADERS, SSU_NODE_CONFIG_KEYS, SSU_NODE_CONFIG_DEFAULT_VALUES, SSUFragmentPacket, SSU_FRAGMENT_HEADER, MAX_UDP_PACKET_SIZE, FRAGMENT_TIMEOUT
@@ -222,7 +222,7 @@ class SSUNode:
                                     result.addr = addr  # Ensure it goes back to sender
                                     await self.send_ssu_request(result)
                                     self.logger.info(f"Sent SSURequest response from hook for header {header}")
-                                elif isinstance(result, (SSUPacket, SSUControlPacket, Packet, InternalHTTPPacket)):
+                                elif isinstance(result, (SSUPacket, SSUControlPacket, Packet, InternalHTTPPacket, InternalHTTPPacketResponse)):
                                     # Rawdog the packet handling
                                     result.addr = addr  # Ensure it goes back to sender
                                     if not result.has_header(packet_to_header(result)):

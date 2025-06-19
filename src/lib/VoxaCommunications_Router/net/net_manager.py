@@ -1,6 +1,7 @@
 import miniupnpc
 import traceback
 import asyncio
+import requests
 import os
 import random
 from stun import get_ip_info, STUN_SERVERS
@@ -9,7 +10,7 @@ from typing import Optional, Any
 from lib.VoxaCommunications_Router.util.net_utils import get_program_ports
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
-from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, INTERNAL_HTTP_PACKET_HEADER
+from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, INTERNAL_HTTP_PACKET_HEADER, InternalHTTPPacketResponse, INTERNAL_HTTP_PACKET_RESPONSE_HEADER
 from lib.VoxaCommunications_Router.net.dns.dns_manager import DNSManager, set_global_dns_manager
 from util.logging import log
 from util.envutils import detect_container
@@ -27,6 +28,7 @@ class NetManager:
         self.dns_manager: DNSManager = None
         self.p2p_config: dict = read_json_from_namespace("config.p2p") or {}
         self.settings: dict = read_json_from_namespace("config.settings") or {}
+        self.server_settings: dict = self.settings.get("server-settings", {})
         self.features: dict = self.settings.get("features", {})
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.stun_servers: list[str] = self.p2p_config.get("stun_servers", list(STUN_SERVERS))
@@ -46,10 +48,24 @@ class NetManager:
 
     async def handle_internal_http_packet(self, packet: InternalHTTPPacket) -> None:
         """Handle incoming internal HTTP packets."""
-        self.logger.info(f"Handling Internal HTTP Packet: {packet}")
-        return SSUPacket(
-            str_data="ack"
-        )
+        self.logger.info(f"Handling Internal HTTP Packet")
+        packet.parse_data()
+        response: requests.Response = None
+        endpoint = f"https://localhost:{self.server_settings.get('port', 9999)}{packet.endpoint}"
+        match packet.method:
+            case "GET":
+                response = requests.get(endpoint, params=packet.params)
+            case "POST":
+                response = requests.post(endpoint, data=packet.post_data)
+        
+        response_packet: InternalHTTPPacketResponse = InternalHTTPPacketResponse()
+        response_packet.error_code = response.status_code
+        response_packet.response_json = response.json()
+        response_packet.build_data()
+        response_packet.assemble_header(INTERNAL_HTTP_PACKET_RESPONSE_HEADER)
+        response_packet.str_to_raw()
+
+        return response_packet
     
     async def setup_libp2p(self) -> None:
         """Set up the P2P host."""

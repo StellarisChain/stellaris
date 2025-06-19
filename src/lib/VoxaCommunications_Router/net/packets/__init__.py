@@ -1,1 +1,2 @@
 from lib.VoxaCommunications_Router.net.packets.internal_http_packet import InternalHTTPPacket, INTERNAL_HTTP_PACKET_HEADER
+from lib.VoxaCommunications_Router.net.packets.internal_http_packet_response import InternalHTTPPacketResponse, INTERNAL_HTTP_PACKET_RESPONSE_HEADER
