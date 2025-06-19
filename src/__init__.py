@@ -1,4 +1,5 @@
-__version__ = "0.1.4" # 1.x.x will be released as a stable version
+__version__ = "0.2.5" # 1.x.x will be released as a stable version
+# Versioning scheme: MAJOR.MINOR.PATCH
 
 from .lib import *
 from .util import *

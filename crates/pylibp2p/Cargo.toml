@@ -8,3 +8,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module", "auto-initialize"] }
+libp2p = { version = "0.54", features = [
+    "tcp", "noise", "yamux", "ping", "identify", "macros", "async-std"
+] }
+libp2p-swarm = { version = "0.45", features = ["macros"] }
+multiaddr = "0.18"
+tokio = { version = "1.38", features = ["full"] }
+async-std = "1.12"
+futures = "0.3"
