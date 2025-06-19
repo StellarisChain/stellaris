@@ -99,6 +99,7 @@ class Main:
         self.logger.info("Setting up NetManager for UPnP/NPC...")
         self.net_manager = NetManager()
         self.net_manager.setup_ssu_node() # Setup SSU Node
+        self.net_manager.setup_internal_http() # SSU to HTTP
         if self.features.get("enable-dns", True):
             self.net_manager.setup_dns_manager()
         set_global_net_manager(self.net_manager)
