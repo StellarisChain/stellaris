@@ -9,10 +9,21 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module", "auto-initialize"] }
 libp2p = { version = "0.54", features = [
-    "tcp", "noise", "yamux", "ping", "identify", "macros", "async-std"
+    "tcp", "quic", "websocket", "dns", "mdns", "noise", "yamux", "mplex",
+    "ping", "identify", "kademlia", "gossipsub", "floodsub", "relay",
+    "dcutr", "autonat", "upnp", "rendezvous", "request-response",
+    "macros", "async-std", "tokio", "serde"
 ] }
 libp2p-swarm = { version = "0.45", features = ["macros"] }
+libp2p-kad = "0.46"
+libp2p-gossipsub = "0.47"
+libp2p-request-response = "0.26"
 multiaddr = "0.18"
 tokio = { version = "1.38", features = ["full"] }
 async-std = "1.12"
 futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
