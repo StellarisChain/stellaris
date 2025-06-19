@@ -1,5 +1,5 @@
 #!/bin/bash
-
+cd ..
 # VoxaCommunications NetNode Container Build Script
 # This script builds the Docker container for the NetNode application
 

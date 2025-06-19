@@ -1,5 +1,5 @@
 #!/bin/bash
-
+cd ..
 # VoxaCommunications-NetNode Nuitka Compilation Script
 # This script compiles the Python application into a standalone executable using Nuitka
 

@@ -24,6 +24,7 @@ class Request:
         #self.data: bytes = "placeholder".encode("utf-8") # using a placeholder right now
         self.request_data: RequestData = request_data
         self.target: str = target # Where the request is being sent, ex "example.com" or an IP address
+        self.data: bytes = b"" # Placeholder for request data
         if self.request_data:
             self.request_data.target = self.target
             self.data = self.request_data.to_bytes()
