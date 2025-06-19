@@ -6,6 +6,7 @@ class Packet(BaseModel):
     raw_data: Optional[bytes] = None # UTF-8 encoded string data
     str_data: Optional[str] = None
     addr: Optional[Union[tuple[str, int], str]] = None # Either a tuple of (IP, port) or a string representing the address
+    packet_weight: int = 5 # Weight of the packet in Spam Prevention systems
 
     # Set the addr to a tuple
     def correct_addr(self) -> None:
