@@ -2,6 +2,7 @@ import json
 import os
 import uuid
 import asyncio
+import requests
 from typing import Optional
 from datetime import datetime
 from lib.VoxaCommunications_Router.registry.registry_manager import RegistryManager
@@ -98,20 +99,47 @@ class RIManager:
         ssu_node: SSUNode = net_manager.ssu_node
         for node_addr in self.bootstrap_nodes:
             self.logger.debug(f"Fetching bootstrap RI from {node_addr}")
-            packet: InternalHTTPPacket = InternalHTTPPacket(
-                addr=node_addr,
-                method="GET",
-                endpoint=f"/data/fetch_{path}"
-            )
-            packet.build_data()
-            packet.str_to_raw()
-            if packet.has_header(SSU_PACKET_HEADER):
-                self.logger.warning("Packet already has SSU header, removing it to prevent conflicts")
-                packet.remove_header()
-            packet.assemble_header(INTERNAL_HTTP_PACKET_HEADER)
-            ssu_request: SSURequest = packet.upgrade_to_ssu_request(generate_request_id=True)
-            response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=50)
-
+            node_addr = str(node_addr)
+            node_addr, method = node_addr.split("$")
+            endpoint = f"/data/fetch_{path}"
+            match method:
+                case "SSU":
+                    packet: InternalHTTPPacket = InternalHTTPPacket(
+                        addr=node_addr,
+                        method="GET",
+                        endpoint=endpoint
+                    )
+                    packet.build_data()
+                    packet.str_to_raw()
+                    if packet.has_header(SSU_PACKET_HEADER):
+                        self.logger.warning("Packet already has SSU header, removing it to prevent conflicts")
+                        packet.remove_header()
+                    packet.assemble_header(INTERNAL_HTTP_PACKET_HEADER)
+                    ssu_request: SSURequest = packet.upgrade_to_ssu_request(generate_request_id=True)
+                    response: SSURequest = await ssu_node.send_ssu_request_and_wait(ssu_request, timeout=50)
+                case "HTTP":
+                    endpoint = f"https://{node_addr}{endpoint}"
+                    response: requests.Response = requests.get(endpoint, timeout=50)
+                    if response.status_code == (200 or 201):
+                        response_json: dict = response.json()
+                        self.logger.info(f"Received response from {node_addr}")
+                        data: list = response_json.get("data", {})
+                        for ri in data:
+                            if isinstance(ri, dict):
+                                ri_data: dict = ri.get("data", {})
+                                schema_type = RRISchema if path == "rri" else NRISchema
+                                try:
+                                    ri_schema = schema_type(**ri_data)
+                                    save_ri(str(uuid.uuid4()), ri_schema.dict(), path=path, allow_duplicates=False)
+                                    self.logger.info(f"Saved {path} from {node_addr}")
+                                except Exception as e:
+                                    self.logger.error(f"Error saving {path} from {node_addr}: {e}")
+                                    continue
+                            else:
+                                self.logger.warning(f"Received non-dict RI from {node_addr}: {ri}")
+                                continue
+                    else:
+                        self.logger.warning(f"Failed to fetch RI from {node_addr}, status code: {response.status_code}")
     def fetch_bootstrap_ri(self, path: Optional[str] = "rri"):
         self.logger.info("Fetching bootstrap RI")
         try:

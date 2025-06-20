@@ -13,8 +13,8 @@
 
     ],
     "bootstrap_nodes": [
-        "172.29.0.1:8999",
-        "bootstrap.connor33341.dev:8999"
+        "172.29.0.1:8999$SSU",
+        "bootstrap.connor33341.dev$HTTP"
     ],
     "replication_factor": 3,
     "routing_table_size": 1000,
