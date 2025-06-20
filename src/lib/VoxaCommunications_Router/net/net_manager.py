@@ -1,7 +1,7 @@
 import miniupnpc
 import traceback
 import asyncio
-import requests
+import httpx  # Replace requests with httpx for async support
 import os
 import random
 from stun import get_ip_info, STUN_SERVERS
@@ -38,6 +38,8 @@ class NetManager:
         self.ip_info: tuple[str, Any, Any] = get_ip_info(stun_host=random.choice(self.stun_servers)) # Probably not the best way to do this, but it works for now
         self.nat_type: Optional[str] = self.ip_info[0] if self.ip_info else None
         self.logger.warning(f"Detected NAT type: {self.nat_type}")
+        # Create a reusable HTTP client for internal requests
+        self._http_client: Optional[httpx.AsyncClient] = None
 
     # Takes UDP packets and sends them to legacy HTTP endpoints
     def setup_internal_http(self) -> None:
@@ -46,27 +48,103 @@ class NetManager:
         self.ssu_node.bind_hook(INTERNAL_HTTP_PACKET_HEADER, self.handle_internal_http_packet)
         self.logger.info("Internal HTTP Packet handler set up successfully")
 
-    async def handle_internal_http_packet(self, packet: InternalHTTPPacket) -> None:
+    async def handle_internal_http_packet(self, packet: InternalHTTPPacket) -> InternalHTTPPacketResponse:
         """Handle incoming internal HTTP packets."""
-        self.logger.info(f"Handling Internal HTTP Packet")
         packet.parse_data()
-        response: requests.Response = None
-        endpoint = f"https://localhost:{self.server_settings.get('port', 9999)}{packet.endpoint}"
-        match packet.method:
-            case "GET":
-                response = requests.get(endpoint, params=packet.params)
-            case "POST":
-                response = requests.post(endpoint, data=packet.post_data)
         
-        response_packet: InternalHTTPPacketResponse = InternalHTTPPacketResponse()
-        response_packet.error_code = response.status_code
-        response_packet.response_json = response.json()
-        response_packet.build_data()
-        response_packet.assemble_header(INTERNAL_HTTP_PACKET_RESPONSE_HEADER)
-        response_packet.str_to_raw()
+        # Use HTTP instead of HTTPS and add timeout
+        port = self.server_settings.get('port', 9999)
+        endpoint = f"http://127.0.0.1:{port}{packet.endpoint}"
+        
+        self.logger.info(f"Handling Internal HTTP Packet, for endpoint: {endpoint}")
+        
+        # Create HTTP client if it doesn't exist
+        if not self._http_client:
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(30.0),  # 30 second timeout
+                verify=False,  # Skip SSL verification for localhost
+                follow_redirects=True
+            )
+        
+        try:
+            response: httpx.Response = None
+            
+            match packet.method.upper():
+                case "GET":
+                    response = await self._http_client.get(endpoint, params=packet.params)
+                case "POST":
+                    # Use json parameter for JSON data, data for form data
+                    if packet.post_data:
+                        response = await self._http_client.post(endpoint, json=packet.post_data)
+                    else:
+                        response = await self._http_client.post(endpoint)
+                case _:
+                    self.logger.warning(f"Unsupported HTTP method: {packet.method}")
+                    # Return error response for unsupported methods
+                    response_packet = InternalHTTPPacketResponse()
+                    response_packet.error_code = 405  # Method Not Allowed
+                    response_packet.response_json = {"error": f"Method {packet.method} not supported"}
+                    response_packet.build_data()
+                    response_packet.assemble_header(INTERNAL_HTTP_PACKET_RESPONSE_HEADER)
+                    response_packet.str_to_raw()
+                    return response_packet
+            
+            self.logger.info(f"Received response with status: {response.status_code}")
+            
+            # Generate response packet
+            response_packet = InternalHTTPPacketResponse()
+            response_packet.error_code = response.status_code
+            
+            # Handle JSON response safely
+            try:
+                response_packet.response_json = response.json()
+            except Exception as json_error:
+                self.logger.warning(f"Failed to parse JSON response: {json_error}")
+                # Fallback to text response
+                response_packet.response_json = {"response_text": response.text}
+            
+            response_packet.build_data()
+            response_packet.assemble_header(INTERNAL_HTTP_PACKET_RESPONSE_HEADER)
+            response_packet.str_to_raw()
+            
+            return response_packet
+            
+        except httpx.TimeoutException:
+            self.logger.error(f"Request timeout for endpoint: {endpoint}")
+            response_packet = InternalHTTPPacketResponse()
+            response_packet.error_code = 408  # Request Timeout
+            response_packet.response_json = {"error": "Request timeout"}
+            response_packet.build_data()
+            response_packet.assemble_header(INTERNAL_HTTP_PACKET_RESPONSE_HEADER)
+            response_packet.str_to_raw()
+            return response_packet
+            
+        except httpx.ConnectError:
+            self.logger.error(f"Connection error for endpoint: {endpoint}")
+            response_packet = InternalHTTPPacketResponse()
+            response_packet.error_code = 503  # Service Unavailable
+            response_packet.response_json = {"error": "Connection failed"}
+            response_packet.build_data()
+            response_packet.assemble_header(INTERNAL_HTTP_PACKET_RESPONSE_HEADER)
+            response_packet.str_to_raw()
+            return response_packet
+            
+        except Exception as e:
+            self.logger.error(f"Unexpected error handling internal HTTP packet: {e}")
+            response_packet = InternalHTTPPacketResponse()
+            response_packet.error_code = 500  # Internal Server Error
+            response_packet.response_json = {"error": f"Internal error: {str(e)}"}
+            response_packet.build_data()
+            response_packet.assemble_header(INTERNAL_HTTP_PACKET_RESPONSE_HEADER)
+            response_packet.str_to_raw()
+            return response_packet
 
-        return response_packet
-    
+    async def cleanup(self):
+        """Clean up resources."""
+        if self._http_client:
+            await self._http_client.aclose()
+            self._http_client = None
+
     async def setup_libp2p(self) -> None:
         """Set up the P2P host."""
         try:

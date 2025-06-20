@@ -216,6 +216,7 @@ class SSUNode:
                                 # self.loop.create_task(hook(packet))  # Run hook asynchronously
 
                                 result = await hook(packet)
+                                self.logger.info("Hook has returned a result")
                                 
                                 # If hook returns a packet, send it back
                                 if isinstance(result, SSURequest):
