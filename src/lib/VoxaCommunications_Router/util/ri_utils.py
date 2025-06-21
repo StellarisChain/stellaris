@@ -329,7 +329,7 @@ def load_all_ri(path: Optional[str] = "local", limit: Optional[int] = None, thre
     return nri_data
 
 @benchmark(name="ri_utils.ri_list", collector=benchmark_collector)
-def ri_list(path: Optional[str] = "local", duplicates: Optional[bool] = False, limit: Optional[int] = None, threaded: Optional[bool] = True) -> Optional[list]:
+def ri_list(path: Optional[str] = "local", duplicates: Optional[bool] = False, limit: Optional[int] = None, threaded: Optional[bool] = False) -> Optional[list]:
     ri_dict: dict = load_all_ri_threaded(path,limit=limit) if threaded else load_all_ri(path,limit=limit)
     ri_list: list = []
     if not ri_dict:

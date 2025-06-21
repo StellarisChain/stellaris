@@ -14,7 +14,7 @@ from lib.VoxaCommunications_Router.net.packets import InternalHTTPPacket, INTERN
 from lib.VoxaCommunications_Router.net.ssu.ssu_request import SSURequest
 from lib.VoxaCommunications_Router.net.ssu.ssu_node import SSUNode
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSU_PACKET_HEADER
-from lib.VoxaCommunications_Router.util.ri_utils import fetch_ri, save_ri
+from lib.VoxaCommunications_Router.util.ri_utils import fetch_ri, save_ri, ri_list
 from lib.compression import JSONCompressor
 from stores.registrycontroller import get_global_registry_manager, set_global_registry_manager
 from schema.RRISchema import RRISchema
@@ -140,6 +140,19 @@ class RIManager:
                                 continue
                     else:
                         self.logger.warning(f"Failed to fetch RI from {node_addr}, status code: {response.status_code}")
+    
+    # Validates all RI for activity and removes inactive ones.
+    # TODO: Implement this
+    def purge_ri(self, path: Optional[str] = "rri") -> None:
+        self.logger.info(f"Purging inactive RIs from {path}")
+        ri_list_data: list = ri_list(path=path)
+        if not ri_list_data:
+            self.logger.info(f"No RIs found in {path} to purge.")
+            return
+        
+        pass
+        
+    
     def fetch_bootstrap_ri(self, path: Optional[str] = "rri"):
         self.logger.info("Fetching bootstrap RI")
         try:
