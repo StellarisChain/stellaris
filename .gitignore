@@ -19,4 +19,3 @@ target
 *.test.py
 json-loader.sh
 dev-configs
-pylibp2p
