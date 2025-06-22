@@ -1,4 +1,62 @@
-# VoxaCommunications: A Decentralized Network for Secure Communication
+# VoxaCommunications: A Decent## Quick Start
+
+Get VoxaCommunications running in 5 minutes:
+
+```bash
+# Clone the repository
+git clone https://github.com/Voxa-Communications/VoxaCommunications-NetNode.git
+cd VoxaCommunications-NetNode
+
+# Start the node (auto-installs dependencies)
+chmod +x run.sh
+./run.sh
+
+# In a new terminal, deploy your first app
+python src/cli.py app deploy
+```
+
+Visit http://localhost:9999/docs to explore the API!
+
+## 📚 Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- **[📖 Complete Documentation](docs/README.md)** - Documentation overview and navigation
+- **[🚀 Getting Started](docs/GETTING_STARTED.md)** - Your first steps with VoxaCommunications
+- **[⚙️ Installation Guide](docs/INSTALLATION.md)** - Detailed installation for all platforms
+- **[🔧 Configuration](docs/CONFIGURATION.md)** - Complete configuration reference
+- **[🏗️ Architecture](docs/ARCHITECTURE.md)** - System design and components
+- **[📡 API Reference](docs/API_REFERENCE.md)** - REST API documentation
+- **[🚀 App Deployment](docs/APP_DEPLOYMENT.md)** - Deploy applications on the network
+- **[🔒 Security Guide](docs/SECURITY.md)** - Security features and best practices
+- **[❓ FAQ](docs/FAQ.md)** - Frequently asked questions
+
+## How to Get Involved
+1. **Star this repo** to show your support!
+2. **[Read the documentation](docs/README.md)** to understand the platform
+3. Check out our [Contributing Guide](CONTRIBUTING.md) for development tasks
+4. Join our [Telegram](https://t.me/voxacommunications) | [Discord](https://discord.gg/EDtPX5E4D4) to discuss ideas and collaborate
+5. Open an Issue to suggest features or report bugs
+
+## Current Features
+- ✅ **Decentralized Application Platform**: Deploy and manage containerized applications
+- ✅ **P2P Networking**: Multi-protocol networking with UPnP and NAT traversal
+- ✅ **Security & Sandboxing**: Container isolation and security policies
+- ✅ **Load Balancing**: Intelligent traffic distribution and health monitoring
+- ✅ **CLI & API**: Comprehensive command-line and REST API interfaces
+- ✅ **Multi-Node Development**: Local testing with multiple nodes
+
+## Roadmap
+- 🔄 **Request Splitting**: Advanced security through distributed request processing
+- 🔄 **Registry Decentralization**: Move from centralized to distributed registry
+- 🔄 **Crypto Chain**: Enhanced blockchain integration for trust and incentives
+- 🔄 **Mobile Clients**: Lightweight mobile applications
+- 🔄 **WebAssembly Support**: Run WASM applications on the network
+
+## License
+Attribution-NonCommercial-ShareAlike 4.0 International
+
+Let's build the future of decentralized communication together! 🚀r Secure Communication
 
 ![TravisBuild](https://app.travis-ci.com/Voxa-Communications/VoxaCommunications-NetNode.svg)
 [![Application Startup](https://github.com/Voxa-Communications/VoxaCommunications-NetNode/actions/workflows/test-run.yml/badge.svg)](https://github.com/Voxa-Communications/VoxaCommunications-NetNode/actions/workflows/test-run.yml)
