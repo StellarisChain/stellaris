@@ -114,7 +114,7 @@ def deploy_example_app() -> None:
         }
     }
     
-    result = make_api_request("/api/apps/deploy_app/", method="POST", data=deploy_data)
+    result = make_api_request("/apps/deploy_app/", method="POST", data=deploy_data)
     
     if "error" in result:
         print(f"Deployment failed: {result}")
@@ -130,7 +130,7 @@ def list_deployed_apps() -> None:
     """List all deployed applications."""
     print("Listing deployed applications...")
     
-    result = make_api_request("/api/apps/list_apps/")
+    result = make_api_request("/apps/list_apps/")
     
     if "error" in result:
         print(f"Failed to list applications: {result}")
@@ -160,7 +160,7 @@ def get_app_status(app_id: str) -> None:
     """Get status of a specific application."""
     print(f"Getting status for application: {app_id}")
     
-    result = make_api_request(f"/api/apps/get_app_status/?app_id={app_id}")
+    result = make_api_request(f"/apps/get_app_status/?app_id={app_id}")
     
     if "error" in result:
         print(f"Failed to get app status: {result}")
@@ -195,7 +195,7 @@ def stop_app(app_id: str) -> None:
     """Stop a deployed application."""
     print(f"Stopping application: {app_id}")
     
-    result = make_api_request(f"/api/apps/stop_app/", method="POST", data={"app_id": app_id})
+    result = make_api_request(f"/apps/stop_app/", method="POST", data={"app_id": app_id})
     
     if "error" in result:
         print(f"Failed to stop application: {result}")
@@ -215,7 +215,7 @@ def scale_app(app_id: str, replicas: int) -> None:
         "replicas": replicas
     }
     
-    result = make_api_request(f"/api/apps/scale_app/", method="POST", data=scale_data)
+    result = make_api_request(f"/apps/scale_app/", method="POST", data=scale_data)
     
     if "error" in result:
         print(f"Failed to scale application: {result}")
