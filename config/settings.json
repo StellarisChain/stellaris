@@ -19,6 +19,7 @@
         "enable-kytan-vpn": true,
         "enable-upnpc-port-forwarding": true,
         "enable-ssu": true,
-        "enable-dns": true
+        "enable-dns": true,
+        "enable-app-deployment": true
     }
 }

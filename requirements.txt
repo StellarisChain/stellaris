@@ -4,6 +4,7 @@ pytest==8.3.5
 kvprocessor>=0.2.14
 fastapi>=0.115.12
 httpx==0.28.1
+aiohttp>=3.8.0
 uvicorn>=0.34.2
 cryptography>=45.0.3
 colorama==0.4.6
@@ -16,5 +17,6 @@ modern-benchmark>=0.1.0
 libp2p>=0.2.8
 miniupnpc>=2.3.3
 pystun3>=2.0.0
+docker>=7.0.0
 maturin
 pip-tools

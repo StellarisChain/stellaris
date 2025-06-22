@@ -116,6 +116,10 @@ class Main:
         if self.features.get("enable-kytan-vpn", False):
             self.logger.info("Enabling Kytan VPN feature...")
             self.start_kytan_server()
+        
+        if self.features.get("enable-app-deployment", False):
+            self.logger.info("Enabling decentralized app deployment feature...")
+            self._setup_app_manager()
 
     def _load_configuration(self) -> None:
         """Load and validate application configuration."""
@@ -251,6 +255,16 @@ class Main:
             
         except Exception as e:
             self.logger.error(f"Failed to start Kytan server thread: {e}")
+
+    def _setup_app_manager(self) -> None:
+        """Initialize the decentralized app manager."""
+        try:
+            from lib.VoxaCommunications_Router.apps.integration import initialize_app_manager
+            self.app_manager = initialize_app_manager()
+            self.logger.info("App manager initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize app manager: {e}")
+            self.app_manager = None
 
     def shutdown(self) -> None:
         """Shutdown the application and cleanup resources."""
