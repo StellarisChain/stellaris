@@ -1,4 +1,5 @@
-# VoxaCommunications: A Decent## Quick Start
+# VoxaCommunications: A Decentralized
+## Quick Start
 
 Get VoxaCommunications running in 5 minutes:
 
