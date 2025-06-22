@@ -97,21 +97,27 @@ def deploy_example_app() -> None:
         return
     
     deploy_data = {
-        "app_id": "example-test-app",
-        "image_or_path": example_path,
-        "app_type": "docker",
-        "replicas": 1,
-        "resources": {
+        "name": "example-test-app",
+        "version": "1.0.0",
+        "image": "example-test-app:latest",
+        "build_config": {
+            "dockerfile_path": os.path.join(example_path, "Dockerfile"),
+            "context_path": example_path
+        },
+        "runtime_config": {
+            "environment": {
+                "APP_ENV": "development",
+                "PORT": "5000"
+            }
+        },
+        "resource_requirements": {
             "cpu_limit": 0.5,
             "memory_limit": "256Mi"
         },
-        "environment": {
-            "APP_ENV": "development",
-            "PORT": "5000"
-        },
-        "network": {
+        "network_config": {
             "ports": [{"container_port": 5000, "host_port": 8080}]
-        }
+        },
+        "replicas": 1
     }
     
     result = make_api_request("/apps/add_app/", method="POST", data=deploy_data)
@@ -122,8 +128,10 @@ def deploy_example_app() -> None:
     
     print(f"✅ Application deployed successfully!")
     print(f"App ID: {result.get('app_id', 'unknown')}")
-    print(f"Status: {result.get('status', 'unknown')}")
-    if result.get('status') == 'running':
+    print(f"Deployment ID: {result.get('deployment_id', 'unknown')}")
+    print(f"Message: {result.get('message', 'No message')}")
+    print(f"Successful instances: {result.get('successful', 0)}/{result.get('total', 0)}")
+    if result.get('successful', 0) > 0:
         print(f"🌐 Access the app at: http://localhost:8080")
 
 def list_deployed_apps() -> None:
