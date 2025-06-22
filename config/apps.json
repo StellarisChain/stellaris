@@ -13,9 +13,12 @@
     "deployment_strategies": ["blue_green", "rolling", "canary"],
     "discovery": {
         "enable_network_discovery": false,
-        "discovery_timeout": 5,
+        "discovery_timeout": 10,
         "max_networks_to_scan": 1,
-        "skip_public_ip_ranges": true
+        "skip_public_ip_ranges": true,
+        "local_only": true,
+        "max_hosts_per_network": 10,
+        "discovery_ports": [8000, 9999]
     },
     "security": {
         "allow_privileged_containers": false,

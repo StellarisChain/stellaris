@@ -408,15 +408,33 @@ class AppManager:
     async def _select_deployment_nodes(self, app_spec: AppSpec) -> List[str]:
         """Select optimal nodes for deployment based on resources and network topology"""
         try:
-            # Get network overview from discovery manager
-            network_info = await self.discovery_manager.get_network_overview()
-            available_nodes = network_info.get("nodes", {})
+            # For local development/testing, use local node if network discovery is disabled
+            discovery_config = self.config.get("discovery", {})
+            if not discovery_config.get("enable_network_discovery", True):
+                self.logger.info("Network discovery disabled, using local node for deployment")
+                return ["local"]
+            
+            # Get network overview from discovery manager with timeout
+            try:
+                network_info = await asyncio.wait_for(
+                    self.discovery_manager.get_network_overview(),
+                    timeout=discovery_config.get("discovery_timeout", 10)
+                )
+                available_nodes = network_info.get("nodes", {})
+            except asyncio.TimeoutError:
+                self.logger.warning("Network discovery timed out, falling back to local deployment")
+                return ["local"]
             
             # Filter nodes based on capabilities and resources
             suitable_nodes = []
             for node_id, node_info in available_nodes.items():
                 if self._is_node_suitable(node_info, app_spec):
                     suitable_nodes.append(node_id)
+            
+            # If no suitable nodes found, fall back to local
+            if not suitable_nodes:
+                self.logger.info("No suitable remote nodes found, using local node")
+                return ["local"]
             
             # Sort by preference (load, latency, resources, etc.)
             suitable_nodes.sort(key=lambda n: self._calculate_node_score(n, app_spec))
@@ -425,8 +443,8 @@ class AppManager:
             return suitable_nodes[:app_spec.replicas]
             
         except Exception as e:
-            self.logger.error(f"Node selection failed: {e}")
-            return []
+            self.logger.error(f"Node selection failed: {e}, falling back to local deployment")
+            return ["local"]
 
     def _is_node_suitable(self, node_info: Dict[str, Any], app_spec: AppSpec) -> bool:
         """Check if a node is suitable for the application"""
@@ -547,7 +565,7 @@ class AppManager:
     def _get_local_node_id(self) -> str:
         """Get the current node's ID"""
         # This would integrate with your existing node identification system
-        return "local_node_id"  # Placeholder
+        return "local"  # For development/testing
 
     async def stop_app(self, app_id: str) -> Dict[str, Any]:
         """Stop all instances of an application"""
