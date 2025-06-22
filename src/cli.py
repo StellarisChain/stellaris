@@ -11,6 +11,8 @@ import json
 import traceback
 import uvicorn
 import io
+import requests
+import time
 from copy import deepcopy
 from typing import Optional
 from lib.VoxaCommunications_Router.util.ri_utils import save_ri
@@ -363,20 +365,38 @@ if __name__ == "__main__":
     rri_decrypt_parser.add_argument("--file", type=str, help="Path to the RRI map file to decrypt. If not provided, uses the last generated map from last_run.txt")
     
     # App subparser
-    app_parser: argparse.ArgumentParser = subparsers.add_parser('app', help='Application-related operations')
+    app_parser: argparse.ArgumentParser = subparsers.add_parser('app', help='Application deployment operations')
     app_subparsers = app_parser.add_subparsers(dest='app_command', help='App commands')
     
-    # App run subcommand
-    app_run_parser: argparse.ArgumentParser = app_subparsers.add_parser('run', help='Run the application server')
-    app_run_parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind the server to (default: 0.0.0.0)")
-    app_run_parser.add_argument("--port", type=int, default=9999, help="Port to bind the server to (default: 9999)")
-    app_run_parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
-    app_run_parser.add_argument("--log-level", type=str, default="info", choices=["critical", "error", "warning", "info", "debug", "trace"], 
-                               help="Set the logging level (default: info)")
-    app_run_parser.add_argument("--use-config", action="store_true", help="Configuration file to use")
+    # App deploy subcommand
+    app_deploy_parser: argparse.ArgumentParser = app_subparsers.add_parser('deploy', help='Deploy an example application')
     
-    args = parser.parse_args()
+    # App list subcommand
+    app_list_parser: argparse.ArgumentParser = app_subparsers.add_parser('list', help='List deployed applications')
+    
+    # App status subcommand
+    app_status_parser: argparse.ArgumentParser = app_subparsers.add_parser('status', help='Get application status')
+    app_status_parser.add_argument("--app-id", type=str, required=True, help="Application ID")
+    
+    # App stop subcommand
+    app_stop_parser: argparse.ArgumentParser = app_subparsers.add_parser('stop', help='Stop an application')
+    app_stop_parser.add_argument("--app-id", type=str, required=True, help="Application ID")
+    
+    # App scale subcommand
+    app_scale_parser: argparse.ArgumentParser = app_subparsers.add_parser('scale', help='Scale an application')
+    app_scale_parser.add_argument("--app-id", type=str, required=True, help="Application ID")
+    app_scale_parser.add_argument("--replicas", type=int, required=True, help="Number of replicas")
 
+    # App server run subcommand  
+    app_run_parser: argparse.ArgumentParser = app_subparsers.add_parser('run', help='Run the application server')
+    app_run_parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
+    app_run_parser.add_argument("--port", type=int, default=8000, help="Port to bind to (default: 8000)")
+    app_run_parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
+    app_run_parser.add_argument("--use-config", action="store_true", help="Use configuration from settings file")
+
+    # Parse the arguments
+    args = parser.parse_args()
+    
     """
         Example usage: 
         python src/cli.py rri map --benchmark --method threaded --mapsize 25 --testdecrypt
@@ -423,6 +443,21 @@ if __name__ == "__main__":
             }
             from main import app
             uvicorn.run(app, host=config.get("host"), port=config.get("port"), reload=config.get("reload", False))
+        elif args.app_command == 'deploy':
+            print(f"Deploying example application...")
+            # Placeholder for deploy logic
+        elif args.app_command == 'list':
+            print(f"Listing deployed applications...")
+            # Placeholder for list logic
+        elif args.app_command == 'status':
+            print(f"Getting status for application ID: {args.app_id}")
+            # Placeholder for status logic
+        elif args.app_command == 'stop':
+            print(f"Stopping application ID: {args.app_id}")
+            # Placeholder for stop logic
+        elif args.app_command == 'scale':
+            print(f"Scaling application ID: {args.app_id} to {args.replicas} replicas")
+            # Placeholder for scale logic
         else:
             app_parser.print_help()
     else:
