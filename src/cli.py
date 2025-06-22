@@ -50,6 +50,192 @@ def create_test_rri(relay_ip: str, relay_port: Optional[int] = None) -> None:
         relay_port=relay_port,
         relay_type="standard",
         capabilities=["routing", "forwarding"],
+        public_key=public_key,
+        last_seen=None,
+        signature=None
+    )
+    save_ri(rri_data, relay_id=rri_data.relay_id)
+
+def make_api_request(endpoint: str, method: str = "GET", data: dict = None, base_url: str = "http://localhost:8000") -> dict:
+    """Helper function to make API requests to the VoxaCommunications server."""
+    url = f"{base_url}{endpoint}"
+    
+    try:
+        if method.upper() == "GET":
+            response = requests.get(url, timeout=30)
+        elif method.upper() == "POST":
+            response = requests.post(url, json=data, timeout=30)
+        else:
+            raise ValueError(f"Unsupported HTTP method: {method}")
+        
+        response.raise_for_status()
+        return response.json()
+    
+    except requests.exceptions.ConnectionError:
+        print(f"Error: Could not connect to server at {base_url}")
+        print("Make sure the VoxaCommunications server is running with: python src/cli.py app run")
+        return {"error": "connection_failed"}
+    except requests.exceptions.Timeout:
+        print(f"Error: Request to {url} timed out")
+        return {"error": "timeout"}
+    except requests.exceptions.RequestException as e:
+        print(f"Error: API request failed: {e}")
+        return {"error": str(e)}
+    except json.JSONDecodeError:
+        print(f"Error: Invalid JSON response from {url}")
+        return {"error": "invalid_json"}
+
+def deploy_example_app() -> None:
+    """Deploy the example test application."""
+    print("Deploying example application...")
+    
+    # Check if example app exists
+    example_path = "/workspaces/VoxaCommunications-NetNode/examples/test-app"
+    if not os.path.exists(os.path.join(example_path, "Dockerfile")):
+        print(f"Error: Example app not found at {example_path}")
+        print("Please ensure the example app directory exists with Dockerfile")
+        return
+    
+    deploy_data = {
+        "app_id": "example-test-app",
+        "image_or_path": example_path,
+        "app_type": "docker",
+        "replicas": 1,
+        "resources": {
+            "cpu_limit": 0.5,
+            "memory_limit": "256Mi"
+        },
+        "environment": {
+            "APP_ENV": "development",
+            "PORT": "5000"
+        },
+        "network": {
+            "ports": [{"container_port": 5000, "host_port": 8080}]
+        }
+    }
+    
+    result = make_api_request("/api/apps/deploy_app/", method="POST", data=deploy_data)
+    
+    if "error" in result:
+        print(f"Deployment failed: {result}")
+        return
+    
+    print(f"✅ Application deployed successfully!")
+    print(f"App ID: {result.get('app_id', 'unknown')}")
+    print(f"Status: {result.get('status', 'unknown')}")
+    if result.get('status') == 'running':
+        print(f"🌐 Access the app at: http://localhost:8080")
+
+def list_deployed_apps() -> None:
+    """List all deployed applications."""
+    print("Listing deployed applications...")
+    
+    result = make_api_request("/api/apps/list_apps/")
+    
+    if "error" in result:
+        print(f"Failed to list applications: {result}")
+        return
+    
+    apps = result.get('apps', [])
+    
+    if not apps:
+        print("No applications are currently deployed.")
+        return
+    
+    print(f"\n📦 Found {len(apps)} deployed application(s):")
+    print("-" * 60)
+    
+    for app in apps:
+        status_icon = "🟢" if app.get('status') == 'running' else "🔴" if app.get('status') == 'failed' else "🟡"
+        print(f"{status_icon} {app.get('app_id', 'unknown')}")
+        print(f"   Status: {app.get('status', 'unknown')}")
+        print(f"   Replicas: {app.get('replicas', 'unknown')}")
+        print(f"   Type: {app.get('app_type', 'unknown')}")
+        if app.get('ports'):
+            ports_str = ", ".join([f"{p.get('host_port')}:{p.get('container_port')}" for p in app.get('ports', [])])
+            print(f"   Ports: {ports_str}")
+        print()
+
+def get_app_status(app_id: str) -> None:
+    """Get status of a specific application."""
+    print(f"Getting status for application: {app_id}")
+    
+    result = make_api_request(f"/api/apps/get_app_status/?app_id={app_id}")
+    
+    if "error" in result:
+        print(f"Failed to get app status: {result}")
+        return
+    
+    app = result.get('app', {})
+    
+    if not app:
+        print(f"❌ Application '{app_id}' not found")
+        return
+    
+    status_icon = "🟢" if app.get('status') == 'running' else "🔴" if app.get('status') == 'failed' else "🟡"
+    print(f"\n{status_icon} Application Status: {app.get('status', 'unknown')}")
+    print("-" * 40)
+    print(f"App ID: {app.get('app_id', 'unknown')}")
+    print(f"Type: {app.get('app_type', 'unknown')}")
+    print(f"Replicas: {app.get('replicas', 'unknown')}")
+    print(f"Created: {app.get('created_at', 'unknown')}")
+    print(f"Last Updated: {app.get('last_updated', 'unknown')}")
+    
+    if app.get('ports'):
+        print("Ports:")
+        for port in app.get('ports', []):
+            print(f"  - {port.get('host_port')}:{port.get('container_port')}")
+    
+    if app.get('environment'):
+        print("Environment Variables:")
+        for key, value in app.get('environment', {}).items():
+            print(f"  - {key}={value}")
+
+def stop_app(app_id: str) -> None:
+    """Stop a deployed application."""
+    print(f"Stopping application: {app_id}")
+    
+    result = make_api_request(f"/api/apps/stop_app/", method="POST", data={"app_id": app_id})
+    
+    if "error" in result:
+        print(f"Failed to stop application: {result}")
+        return
+    
+    if result.get('success'):
+        print(f"✅ Application '{app_id}' stopped successfully")
+    else:
+        print(f"❌ Failed to stop application '{app_id}': {result.get('message', 'unknown error')}")
+
+def scale_app(app_id: str, replicas: int) -> None:
+    """Scale an application to the specified number of replicas."""
+    print(f"Scaling application '{app_id}' to {replicas} replicas...")
+    
+    scale_data = {
+        "app_id": app_id,
+        "replicas": replicas
+    }
+    
+    result = make_api_request(f"/api/apps/scale_app/", method="POST", data=scale_data)
+    
+    if "error" in result:
+        print(f"Failed to scale application: {result}")
+        return
+    
+    if result.get('success'):
+        print(f"✅ Application '{app_id}' scaled to {replicas} replicas successfully")
+    else:
+        print(f"❌ Failed to scale application '{app_id}': {result.get('message', 'unknown error')}")
+
+def create_test_rri(relay_ip: str, relay_port: Optional[int] = None) -> None:
+    key_generator = RSAKeyGenerator()
+    keys = key_generator.generate_keys()
+    public_key, private_key = keys["public_key"], keys["private_key"]
+    rri_data = RRISchema(
+        relay_id=str(uuid.uuid4()),
+        relay_ip=relay_ip,
+        relay_port=relay_port,
+        relay_type="standard",
+        capabilities=["routing", "forwarding"],
         metadata={"location": "datacenter-1"},
         public_key=public_key,
         public_key_hash=keys["public_key_hash"],  # Use hash from same key generation
@@ -444,20 +630,15 @@ if __name__ == "__main__":
             from main import app
             uvicorn.run(app, host=config.get("host"), port=config.get("port"), reload=config.get("reload", False))
         elif args.app_command == 'deploy':
-            print(f"Deploying example application...")
-            # Placeholder for deploy logic
+            deploy_example_app()
         elif args.app_command == 'list':
-            print(f"Listing deployed applications...")
-            # Placeholder for list logic
+            list_deployed_apps()
         elif args.app_command == 'status':
-            print(f"Getting status for application ID: {args.app_id}")
-            # Placeholder for status logic
+            get_app_status(args.app_id)
         elif args.app_command == 'stop':
-            print(f"Stopping application ID: {args.app_id}")
-            # Placeholder for stop logic
+            stop_app(args.app_id)
         elif args.app_command == 'scale':
-            print(f"Scaling application ID: {args.app_id} to {args.replicas} replicas")
-            # Placeholder for scale logic
+            scale_app(args.app_id, args.replicas)
         else:
             app_parser.print_help()
     else:
