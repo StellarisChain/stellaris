@@ -11,6 +11,12 @@
     "registry_urls": ["docker.io", "ghcr.io"],
     "build_timeout": 600,
     "deployment_strategies": ["blue_green", "rolling", "canary"],
+    "discovery": {
+        "enable_network_discovery": false,
+        "discovery_timeout": 5,
+        "max_networks_to_scan": 1,
+        "skip_public_ip_ranges": true
+    },
     "security": {
         "allow_privileged_containers": false,
         "enable_resource_limits": true,
