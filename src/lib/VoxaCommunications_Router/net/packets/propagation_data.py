@@ -8,6 +8,7 @@ class PropagationData(BaseModel):
     packet: SSUPacket = None
     current_depth: int = 0
     target_depth: int = 2
+    target_ri: Optional[str] = "ALL" # RRI, NRI, or ALL
 
     def load_header(self):
         """
