@@ -74,7 +74,7 @@ class DNSManager:
     
     def save_record(self, record: Union[DNSRecord, ARecord], 
                    file_name: Optional[str] = None,
-                   path: str = "dns") -> bool:
+                   path: str = "dns", duplicates: Optional[bool] = False) -> bool:
         """
         Save a DNS record to storage
         
@@ -82,6 +82,7 @@ class DNSManager:
             record: The DNS record to save
             file_name: Optional custom filename (if not provided, generates UUID)
             path: Storage path (default "dns")
+            duplicates: Whether to allow duplicate records (default False)
             
         Returns:
             bool: True if saved successfully, False otherwise
@@ -91,6 +92,64 @@ class DNSManager:
                 file_name = str(uuid.uuid4())
             
             record_data = record.dict() if hasattr(record, 'dict') else record.__dict__
+            
+            # Check for duplicates if duplicates=False
+            if not duplicates:
+                domain = record_data.get("domain")
+                if domain:
+                    # Get existing records for this domain
+                    existing_records = self.get_records_by_domain(domain, path)
+                    
+                    if existing_records:
+                        # Get the new record's creation timestamp
+                        new_creation_time = None
+                        if hasattr(record, 'creation_date') and record.creation_date:
+                            try:
+                                new_creation_time = datetime.fromisoformat(record.creation_date)
+                            except ValueError:
+                                self.logger.warning(f"Invalid creation_date format for new record: {record.creation_date}")
+                        
+                        # If no creation_date in record, use current time
+                        if new_creation_time is None:
+                            new_creation_time = datetime.now()
+                            # Update the record with current timestamp
+                            if hasattr(record, 'creation_date'):
+                                record.creation_date = new_creation_time.isoformat()
+                                record_data = record.dict() if hasattr(record, 'dict') else record.__dict__
+                        
+                        # Check against existing records
+                        should_save = True
+                        oldest_existing_time = None
+                        oldest_file = None
+                        
+                        for existing_record in existing_records:
+                            existing_creation_time = existing_record.get("creation_time")
+                            if existing_creation_time:
+                                try:
+                                    existing_dt = datetime.fromisoformat(existing_creation_time)
+                                    
+                                    # Track the oldest existing record
+                                    if oldest_existing_time is None or existing_dt < oldest_existing_time:
+                                        oldest_existing_time = existing_dt
+                                    
+                                    # If existing record is older than new record, don't save
+                                    if existing_dt <= new_creation_time:
+                                        should_save = False
+                                        self.logger.info(f"Skipping save for domain {domain}: existing record is older or same age")
+                                        break
+                                        
+                                except ValueError:
+                                    self.logger.warning(f"Invalid timestamp format in existing record: {existing_creation_time}")
+                        
+                        if not should_save:
+                            return False
+                        
+                        # If we're saving because new record is older, remove the existing newer records
+                        if oldest_existing_time and new_creation_time < oldest_existing_time:
+                            self.logger.info(f"New record for domain {domain} is older, removing existing newer records")
+                            removed_count = self._remove_duplicate_records(domain, new_creation_time, path)
+                            if removed_count > 0:
+                                self.logger.info(f"Removed {removed_count} newer duplicate records for domain {domain}")
             
             success = dns_utils.save_file(file_name, record_data, path)
             
@@ -371,6 +430,58 @@ class DNSManager:
             self.logger.error(f"Error getting DNS manager stats: {e}")
             return {"error": str(e)}
         
+    def _remove_duplicate_records(self, domain: str, cutoff_time: datetime, path: str = "dns") -> int:
+        """
+        Remove records for a domain that are newer than the cutoff time
+        
+        Args:
+            domain: The domain to check for duplicates
+            cutoff_time: Remove records newer than this time
+            path: Storage path (default "dns")
+            
+        Returns:
+            int: Number of records removed
+        """
+        removed_count = 0
+        try:
+            import os
+            from util.jsonreader import read_json_from_namespace
+            
+            storage_config = read_json_from_namespace("config.storage")
+            if not storage_config:
+                self.logger.error("Storage configuration not found")
+                return 0
+            
+            data_dir = storage_config.get("data-dir", "data/")
+            file_subdir = dict(storage_config.get("sub-dirs", {})).get(path, "dns/")
+            file_dir = os.path.join(data_dir, file_subdir)
+            
+            if not os.path.exists(file_dir):
+                return 0
+            
+            # Check all files in the directory
+            for file_name in os.listdir(file_dir):
+                if file_name.endswith(".bin"):
+                    try:
+                        file_name_without_ext = file_name.replace(".bin", "")
+                        record_data, creation_time = dns_utils.load_file(file_name_without_ext, path)
+                        
+                        if record_data and record_data.get("domain") == domain:
+                            if creation_time and creation_time > cutoff_time:
+                                # Remove this file as it's newer than the cutoff
+                                file_path = os.path.join(file_dir, file_name)
+                                os.remove(file_path)
+                                removed_count += 1
+                                self.logger.info(f"Removed duplicate record file: {file_name}")
+                                
+                    except Exception as e:
+                        self.logger.error(f"Error processing file {file_name} for duplicate removal: {e}")
+                        
+        except Exception as e:
+            self.logger.error(f"Error removing duplicate records for domain {domain}: {e}")
+            
+        return removed_count
+
 global_dns_manager: DNSManager = None
 
 def get_global_dns_manager() -> DNSManager:

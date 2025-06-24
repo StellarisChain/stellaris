@@ -26,3 +26,5 @@ class DNSHandler:
     async def handle_dns_packet(self, packet: DNSPacket) -> None:
         self.logger.debug(f"Handling DNS packet: {packet}")
         schema: Optional[Union[ARecord, DNSRecord]] = packet.to_schema()
+        self.dns_manager.save_record(record=schema, duplicates=False)
+        self.logger.info(f"DNS record saved: {schema.domain} -> {schema.ip_address}")
