@@ -1,6 +1,8 @@
 import hashlib
 import json
 import time
+import rsa
+import base64
 from typing import List, Optional, Dict, Any, Union
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -85,10 +87,44 @@ class Block:
         if not transaction.inputs and not transaction.outputs:
             return False
         
-        # TODO: Implement signature validation
+        # Validate digital signature
+        if not self.verify_transaction_signature(transaction):
+            return False
+        
         # TODO: Implement UTXO validation
         
         return True
+    
+    def verify_transaction_signature(self, transaction: Transaction) -> bool:
+        """Verify the digital signature of a transaction"""
+        try:
+            # Reconstruct the message that was signed (transaction data without signature)
+            tx_data = {
+                'inputs': transaction.inputs,
+                'outputs': transaction.outputs,
+                'fee': transaction.fee,
+                'timestamp': transaction.timestamp,
+                'public_key': transaction.public_key,
+                'nonce': transaction.nonce
+            }
+            message = json.dumps(tx_data, sort_keys=True).encode('utf-8')
+            
+            # Decode the signature from base64
+            signature_bytes = base64.b64decode(transaction.signature)
+            
+            # Load the public key
+            public_key = rsa.PublicKey.load_pkcs1(transaction.public_key.encode('utf-8'), format='PEM')
+            
+            # Verify the signature
+            try:
+                rsa.verify(message, signature_bytes, public_key)
+                return True
+            except rsa.VerificationError:
+                return False
+                
+        except (ValueError, TypeError, Exception):
+            # Invalid signature format or other errors
+            return False
     
     def to_dict(self) -> Dict[str, Any]:
         return {
