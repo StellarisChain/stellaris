@@ -26,5 +26,10 @@ class DNSHandler:
     async def handle_dns_packet(self, packet: DNSPacket) -> None:
         self.logger.debug(f"Handling DNS packet: {packet}")
         schema: Optional[Union[ARecord, DNSRecord]] = packet.to_schema()
-        self.dns_manager.save_record(record=schema, duplicates=False)
-        self.logger.info(f"DNS record saved: {schema.domain} -> {schema.ip_address}")
+        if len(self.dns_manager.get_records_by_domain(domain=schema.domain)) <= 2:
+            self.dns_manager.save_record(record=schema, duplicates=False)
+            self.logger.info(f"DNS record saved: {schema.domain} -> {schema.ip_address}")
+            return None
+        
+        # TODO: Propagate the DNS Record
+        self.logger.warning(f"DNS record for {schema.domain} already exists, not saving duplicate")
