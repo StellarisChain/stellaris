@@ -149,10 +149,45 @@ class RIManager:
         if not ri_list_data:
             self.logger.info(f"No RIs found in {path} to purge.")
             return
-        
         pass
         
-    
+    def push_ri_to_bootstrap(self, ri_type: Optional[str] = "nri", path: Optional[str] = "local") -> None:
+        """Push the RI to the bootstrap nodes. """
+        self.logger.info(f"Pushing {ri_type} to bootstrap nodes")
+        ri_data: dict = fetch_ri(ri_type, path=path)
+        if not ri_data:
+            self.logger.error(f"No {ri_type} data found to push to bootstrap nodes.")
+            return
+        
+        for node_addr in self.bootstrap_nodes:
+            self.logger.debug(f"Pushing {ri_type} to bootstrap node {node_addr}")
+            node_addr = str(node_addr)
+            node_addr, method = node_addr.split("$")
+            endpoint = f"/data/add_{ri_type}"
+            match method:
+                case "SSU":
+                    packet: InternalHTTPPacket = InternalHTTPPacket(
+                        addr=node_addr,
+                        method="POST",
+                        endpoint=endpoint,
+                        data=ri_data
+                    )
+                    packet.build_data()
+                    packet.str_to_raw()
+                    if packet.has_header(SSU_PACKET_HEADER):
+                        self.logger.warning("Packet already has SSU header, removing it to prevent conflicts")
+                        packet.remove_header()
+                    packet.assemble_header(INTERNAL_HTTP_PACKET_HEADER)
+                    ssu_request: SSURequest = packet.upgrade_to_ssu_request(generate_request_id=True)
+                    response: SSURequest = asyncio.run(self.registry_manager.ssu_node.send_ssu_request_and_wait(ssu_request, timeout=50))
+                case "HTTP":
+                    endpoint = f"https://{node_addr}{endpoint}"
+                    response: requests.Response = requests.post(endpoint, json=ri_data, timeout=50)
+                    if response.status_code == (200 or 201):
+                        self.logger.info(f"Successfully pushed {ri_type} to {node_addr}")
+                    else:
+                        self.logger.error(f"Failed to push {ri_type} to {node_addr}, status code: {response.status_code}")
+                        
     def fetch_bootstrap_ri(self, path: Optional[str] = "rri"):
         self.logger.info("Fetching bootstrap RI")
         try:
@@ -200,7 +235,11 @@ class RIManager:
         nri_data["version"] = str(__version__)
         save_ri("nri", nri_data, path="local")
         key_manager.save_hybrid_keys() # Have to do this after the file is written, since it uses the file to save the keys, eventhough they are alreadt saved
-        self.logger.info(f"Successfully initialized node with NRI data")
+        self.logger.info(f"Successfully initialized node with NRI data. Bootstrapping ...")
+        self.fetch_bootstrap_ri(path="nri")
+        self.fetch_bootstrap_ri(path="rri")
+        self.logger.info("Node successfully initialized and bootstrapped. Pushing Node to Bootstrap Nodes")
+
 
     def initialize_relay(self):
         pass
