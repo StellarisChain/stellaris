@@ -9,6 +9,8 @@ import traceback
 from typing import Dict, Any, Optional
 from fastapi import HTTPException, Request as FastAPIRequest
 from pydantic import BaseModel, Field
+from schema.apps.deploy_app_request import DeployAppRequest
+from schema.apps.app_deployment_response import AppDeploymentResponse
 
 from lib.VoxaCommunications_Router.apps.app_manager import (
     get_global_app_manager, AppSpec, AppManager
@@ -16,28 +18,6 @@ from lib.VoxaCommunications_Router.apps.app_manager import (
 from util.logging import log
 
 logger = log()
-
-class DeployAppRequest(BaseModel):
-    name: str = Field(..., description="Application name")
-    version: str = Field(..., description="Application version") 
-    image: Optional[str] = Field(None, description="Docker image (for container deployment)")
-    source_code_hash: Optional[str] = Field(None, description="Source code hash (for source deployment)")
-    build_config: Optional[Dict[str, Any]] = Field(None, description="Build configuration")
-    runtime_config: Dict[str, Any] = Field(default_factory=dict, description="Runtime configuration")
-    resource_requirements: Optional[Dict[str, Any]] = Field(None, description="Resource requirements")
-    network_config: Optional[Dict[str, Any]] = Field(None, description="Network configuration")
-    replicas: int = Field(1, description="Number of replicas to deploy")
-    target_nodes: Optional[list[str]] = Field(None, description="Specific nodes to deploy to")
-
-class AppDeploymentResponse(BaseModel):
-    success: bool
-    app_id: str
-    deployment_id: str
-    message: str
-    instances: list[Dict[str, Any]]
-    successful: int
-    failed: int
-    total: int
 
 async def handler(request: FastAPIRequest) -> AppDeploymentResponse:
     """Deploy an application to the decentralized network"""

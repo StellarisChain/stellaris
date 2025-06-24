@@ -19,3 +19,4 @@ target
 *.test.py
 json-loader.sh
 dev-configs
+stellaris-prototype
