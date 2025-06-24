@@ -26,6 +26,7 @@ from lib.VoxaCommunications_Router.routing.routeutils import benchmark_collector
 from lib.VoxaCommunications_Router.net.net_interface import send_request, request_factory
 from lib.VoxaCommunications_Router.net.net_manager import NetManager, set_global_net_manager
 from schema.RRISchema import RRISchema
+from schema.NRISchema import NRISchema
 from stores.registrycontroller import get_global_registry_manager, set_global_registry_manager
 from util.filereader import save_key_file, read_key_file
 from util.jsonreader import read_json_from_namespace
@@ -54,7 +55,18 @@ def create_test_rri(relay_ip: str, relay_port: Optional[int] = None) -> None:
         last_seen=None,
         signature=None
     )
-    save_ri(rri_data, relay_id=rri_data.relay_id)
+    save_ri(rri_data.relay_id, rri_data.dict(), "rri")
+
+def create_ri_from_ports(type: str = "nri", ports: list[int] = []) -> None:
+    for port in ports:
+        if type == "nri":
+            nri_data = NRISchema(
+                node_id=str(uuid.uuid4()),
+                node_ip="127.0.0.1",
+                node_port=port,
+                node_name=f"testnet-0{port}",
+            )
+            save_ri(nri_data.node_id, nri_data.dict(), "nri")
 
 def make_api_request(endpoint: str, method: str = "GET", data: dict = None, base_url: str = "http://localhost:8000") -> dict:
     """Helper function to make API requests to the VoxaCommunications server."""
@@ -526,6 +538,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate test data for VoxaCommunications.")
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
+    # NRI subparser
+    nri_parser: argparse.ArgumentParser = subparsers.add_parser('nri', help='NRI-related test data generation')
+    nri_subparsers = nri_parser.add_subparsers(dest='nri_command', help='NRI commands')
+
+    # NRI for ports subcommand
+    nri_ports_parser: argparse.ArgumentParser = nri_subparsers.add_parser('create', help='Create NRI entries for specified ports')
+    nri_ports_parser.add_argument("--ports", nargs='+', type=int, default=[8000, 8001, 8002], 
+                                  help="List of ports to create NRI entries for (default: 8000 8001 8002). "
+                                       "Example: --ports 8000 8001 8002 8003") 
     # RRI subparser
     rri_parser: argparse.ArgumentParser = subparsers.add_parser('rri', help='RRI-related test data generation')
     rri_subparsers = rri_parser.add_subparsers(dest='rri_command', help='RRI commands')
@@ -649,5 +670,11 @@ if __name__ == "__main__":
             scale_app(args.app_id, args.replicas)
         else:
             app_parser.print_help()
+    elif args.command == 'nri':
+        if args.nri_command == 'create':
+            create_ri_from_ports(ports=args.ports)
+            print(f"Created NRI entries for ports: {args.ports}")
+        else:
+            nri_parser.print_help()
     else:
         parser.print_help()

@@ -1,7 +1,6 @@
 from typing import Optional, Union, Dict, Any
 from pydantic import BaseModel
 from lib.VoxaCommunications_Router.net.ssu.ssu_packet import SSUPacket
-from lib.VoxaCommunications_Router.net.ssu.ssu_utils import attempt_upgrade
 
 class PropagationData(BaseModel):
     packet_header: Optional[str] = None
@@ -20,4 +19,5 @@ class PropagationData(BaseModel):
         self.packet.remove_header()
 
     def upgrade_packet(self) -> None:
+        from lib.VoxaCommunications_Router.net.ssu.ssu_utils import attempt_upgrade
         self.packet = attempt_upgrade(self.packet)

@@ -273,6 +273,36 @@ show_startup_progress() {
     echo -e "${GREEN}Startup wait period complete, beginning health checks...${NC}"
 }
 
+# Function to create NRI entries for all nodes
+create_nri_entries() {
+    local ports_list=""
+    for ((i=1; i<=NODE_COUNT; i++)); do
+        local api_port=$((BASE_API_PORT + i - 1))
+        if [ -z "$ports_list" ]; then
+            ports_list="$api_port"
+        else
+            ports_list="$ports_list $api_port"
+        fi
+    done
+    
+    echo -e "${BLUE}Creating NRI entries for node ports: $ports_list${NC}"
+    
+    # Activate virtual environment
+    if [ -d ".venv" ]; then
+        source .venv/bin/activate
+    fi
+    
+    # Run the NRI create command
+    python src/cli.py nri create --ports $ports_list
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ NRI entries created successfully for ports: $ports_list${NC}"
+    else
+        echo -e "${RED}✗ Failed to create NRI entries${NC}"
+        return 1
+    fi
+}
+
 # Main execution
 echo -e "${YELLOW}Setting up $NODE_COUNT development nodes...${NC}"
 
@@ -318,6 +348,14 @@ done
 
 echo -e "\n${GREEN}Health check process completed!${NC}"
 
+# Create NRI entries for all healthy nodes if at least one node is healthy
+if [ $healthy_nodes -gt 0 ]; then
+    echo -e "\n${BLUE}Creating NRI entries for node network...${NC}"
+    create_nri_entries
+else
+    echo -e "\n${YELLOW}Skipping NRI creation - no healthy nodes found${NC}"
+fi
+
 # Display final status
 echo -e "\n${BLUE}=== Development Network Status ===${NC}"
 echo -e "${GREEN}Healthy nodes: $healthy_nodes/$NODE_COUNT${NC}"
@@ -345,6 +383,17 @@ done
 echo -e "\n${YELLOW}Useful commands:${NC}"
 echo -e "${BLUE}# Test discovery between nodes:${NC}"
 echo -e "python test_discovery.py"
+echo -e "\n${BLUE}# Recreate NRI entries:${NC}"
+ports_list=""
+for ((i=1; i<=NODE_COUNT; i++)); do
+    api_port=$((BASE_API_PORT + i - 1))
+    if [ -z "$ports_list" ]; then
+        ports_list="$api_port"
+    else
+        ports_list="$ports_list $api_port"
+    fi
+done
+echo -e "python src/cli.py nri create --ports $ports_list"
 echo -e "\n${BLUE}# Check all node APIs:${NC}"
 for ((i=1; i<=NODE_COUNT; i++)); do
     api_port=$((BASE_API_PORT + i - 1))
