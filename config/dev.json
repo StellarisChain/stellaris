@@ -1,7 +1,0 @@
-{
-    "uvicorn-config": {
-        "auto-reload": false
-    },
-    "debug": true,
-    "retry-decrypt": true
-}

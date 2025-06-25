@@ -1,1 +1,0 @@
-Python bindings for libp2p-rs as the python implementation is partially developed
