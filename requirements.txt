@@ -21,3 +21,5 @@ pystun3>=2.0.0
 docker>=7.0.0
 maturin
 pip-tools
+p2pd
+pip <= 23.3.1

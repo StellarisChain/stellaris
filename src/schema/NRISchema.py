@@ -10,6 +10,7 @@ class NRISchema(BaseModel):
     node_ip: str
     node_port: int
     node_type: str = "mainnet"
+    #node_nickname: Optional[str] = None
     capabilities: List[str] = []
     # routing_table: Dict[str, Any] = {}
     metadata: Optional[Dict[str, Any]] = {}
@@ -42,7 +43,7 @@ class NRISchema(BaseModel):
     
     @validator('node_type')
     def validate_node_type(cls, v):
-        allowed_types = ["mainnet", "testnet", "devnet"]
+        allowed_types = ["mainnet", "testnet", "devnet", "standard"]
         if v not in allowed_types:
             raise ValueError(f'Node type must be one of: {", ".join(allowed_types)}')
         return v

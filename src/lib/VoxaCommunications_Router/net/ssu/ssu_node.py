@@ -254,6 +254,17 @@ class SSUNode:
         self.packet_hooks[packet_header] = hook
         self.logger.info(f"Hook bound for packet header: {packet_header}")
 
+    async def fire_hook(self, packet: Packet | SSUPacket | SSUControlPacket):
+        for header, hook in self.packet_hooks.items():
+            if packet.get_header() == header:
+                try:
+                    packet: Union[Packet, SSUPacket, SSUControlPacket, InternalHTTPPacket, PropagationPacket] = attempt_upgrade(packet)
+                    self.logger.info(f"Executing packet hook for header {header}")
+                    # self.loop.create_task(hook(packet))  # Run hook asynchronous
+                    result = await hook(packet)           
+                except Exception as e:
+                    self.logger.error(f"Error executing packet hook for {header}: {e}")
+
     @deprecated("Use send_ssu_request instead")
     async def send_packet(self, packet: Packet | SSUPacket | SSUControlPacket):
         """

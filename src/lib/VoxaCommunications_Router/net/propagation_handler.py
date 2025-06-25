@@ -42,6 +42,7 @@ class PropagationHandler:
         try:
             propagate = True # Forward the packet to all the listed NRI or RRI nodes
             packet_data = packet.parse_data()
+            packet_data.load_header()  # Load the header from the packet data
             self.logger.info(f"Processed propagation data: {packet_data}")
             packet_data.upgrade_packet()
             packet_data.current_depth += 1
@@ -89,6 +90,8 @@ class PropagationHandler:
                     propagation_packet_clone.addr = target_addr
 
                     self.send_propagation_packet(propagation_packet_clone)
+
+                self.ssu_node.fire_hook(packet_data.packet)
 
         except Exception as e:
             self.logger.error(f"Failed to process propagation packet: {e}")

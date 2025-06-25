@@ -31,5 +31,4 @@ class DNSHandler:
             self.logger.info(f"DNS record saved: {schema.domain} -> {schema.ip_address}")
             return None
         
-        # TODO: Propagate the DNS Record
         self.logger.warning(f"DNS record for {schema.domain} already exists, not saving duplicate")

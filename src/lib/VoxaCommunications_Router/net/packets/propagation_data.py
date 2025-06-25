@@ -16,7 +16,7 @@ class PropagationData(BaseModel):
         if not self.packet:
             raise ValueError("Packet is not set")
         self.packet_header = self.packet.get_header()
-        self.packet.remove_header()
+        #self.packet.remove_header()
 
     def upgrade_packet(self) -> None:
         from lib.VoxaCommunications_Router.net.ssu.ssu_utils import attempt_upgrade
