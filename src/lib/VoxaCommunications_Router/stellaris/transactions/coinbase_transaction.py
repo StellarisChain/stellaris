@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from lib.VoxaCommunications_Router.stellaris.constants import ENDIAN
 from lib.VoxaCommunications_Router.stellaris.utils.general import sha256
-from ..transactions import TransactionOutput
+from lib.VoxaCommunications_Router.stellaris.transactions import TransactionOutput
 
 
 class CoinbaseTransaction:
