@@ -1,7 +1,7 @@
 from decimal import Decimal
 
-from lib.VoxaCommunications_Router.stellaris.constants import ENDIAN, SMALLEST, CURVE
-from lib.VoxaCommunications_Router.stellaris.utils.general import byte_length, string_to_point, string_to_bytes
+from stellaris.constants import ENDIAN, SMALLEST, CURVE
+from stellaris.utils.general import byte_length, string_to_point, string_to_bytes
 
 
 class TransactionOutput:

@@ -23,14 +23,14 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from lib.VoxaCommunications_Router.stellaris.utils.general import timestamp, sha256, transaction_to_json
-from lib.VoxaCommunications_Router.stellaris.manager import create_block, get_difficulty, Manager, get_transactions_merkle_tree, \
+from stellaris.utils.general import timestamp, sha256, transaction_to_json
+from stellaris.manager import create_block, get_difficulty, Manager, get_transactions_merkle_tree, \
     split_block_content, calculate_difficulty, clear_pending_transactions, block_to_bytes, get_transactions_merkle_tree_ordered
-from lib.VoxaCommunications_Router.stellaris.node.nodes_manager import NodesManager, NodeInterface
-from lib.VoxaCommunications_Router.stellaris.node.utils import ip_is_local
-from lib.VoxaCommunications_Router.stellaris.transactions import Transaction, CoinbaseTransaction
-from lib.VoxaCommunications_Router.stellaris.database import Database
-from lib.VoxaCommunications_Router.stellaris.constants import VERSION, ENDIAN
+from stellaris.node.nodes_manager import NodesManager, NodeInterface
+from stellaris.node.utils import ip_is_local
+from stellaris.transactions import Transaction, CoinbaseTransaction
+from stellaris.database import Database
+from stellaris.constants import VERSION, ENDIAN
 
 
 limiter = Limiter(key_func=get_remote_address)

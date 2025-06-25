@@ -4,8 +4,8 @@ from typing import Tuple
 from fastecdsa import ecdsa
 from fastecdsa.point import Point
 
-from lib.VoxaCommunications_Router.stellaris.constants import CURVE, ENDIAN, SMALLEST
-from lib.VoxaCommunications_Router.stellaris.utils.general import point_to_string, string_to_point
+from stellaris.constants import CURVE, ENDIAN, SMALLEST
+from stellaris.utils.general import point_to_string, string_to_point
 
 
 class TransactionInput:
@@ -27,14 +27,14 @@ class TransactionInput:
 
     async def get_transaction(self):
         if self.transaction is None:
-            from lib.VoxaCommunications_Router.stellaris.database import Database
+            from stellaris.database import Database
             self.transaction = await Database.instance.get_transaction(self.tx_hash, check_signatures=False)
             assert self.transaction is not None
         return self.transaction
 
     async def get_transaction_info(self):
         if self.transaction_info is None:
-            from lib.VoxaCommunications_Router.stellaris.database import Database
+            from stellaris.database import Database
             self.transaction_info = await Database.instance.get_transaction_info(self.tx_hash)
         assert self.transaction_info is not None
         return self.transaction_info

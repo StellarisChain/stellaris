@@ -4,11 +4,11 @@ from io import BytesIO
 from math import ceil, floor, log
 from typing import Tuple, List, Union
 
-from lib.VoxaCommunications_Router.stellaris.database import Database, OLD_BLOCKS_TRANSACTIONS_ORDER
-from lib.VoxaCommunications_Router.stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX
-from lib.VoxaCommunications_Router.stellaris.utils.general import sha256, timestamp, bytes_to_string, string_to_bytes
-from lib.VoxaCommunications_Router.stellaris.transactions import CoinbaseTransaction, Transaction
-from lib.VoxaCommunications_Router.stellaris.utils.block_utils import calculate_difficulty, difficulty_to_hashrate, difficulty_to_hashrate_old, hashrate_to_difficulty, hashrate_to_difficulty_old, hashrate_to_difficulty_wrong, BLOCK_TIME, BLOCKS_COUNT, START_DIFFICULTY
+from stellaris.database import Database, OLD_BLOCKS_TRANSACTIONS_ORDER
+from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX
+from stellaris.utils.general import sha256, timestamp, bytes_to_string, string_to_bytes
+from stellaris.transactions import CoinbaseTransaction, Transaction
+from stellaris.utils.block_utils import calculate_difficulty, difficulty_to_hashrate, difficulty_to_hashrate_old, hashrate_to_difficulty, hashrate_to_difficulty_old, hashrate_to_difficulty_wrong, BLOCK_TIME, BLOCKS_COUNT, START_DIFFICULTY
 
 async def get_difficulty() -> Tuple[Decimal, dict]:
     if Manager.difficulty is None:

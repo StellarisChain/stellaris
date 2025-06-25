@@ -6,8 +6,8 @@ from random import sample
 import httpx
 import pickledb
 
-from lib.VoxaCommunications_Router.stellaris.constants import MAX_BLOCK_SIZE_HEX
-from lib.VoxaCommunications_Router.stellaris.utils.general import timestamp
+from stellaris.constants import MAX_BLOCK_SIZE_HEX
+from stellaris.utils.general import timestamp
 
 ACTIVE_NODES_DELTA = 60 * 60 * 24 * 7  # 7 days
 INACTIVE_NODES_DELTA = 60 * 60 * 24 * 90  # 3 months

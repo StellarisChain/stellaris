@@ -1,8 +1,8 @@
 from decimal import Decimal
 
-from lib.VoxaCommunications_Router.stellaris.constants import ENDIAN
-from lib.VoxaCommunications_Router.stellaris.utils.general import sha256
-from lib.VoxaCommunications_Router.stellaris.transactions import TransactionOutput
+from stellaris.constants import ENDIAN
+from stellaris.utils.general import sha256
+from stellaris.transactions import TransactionOutput
 
 
 class CoinbaseTransaction:
@@ -15,7 +15,7 @@ class CoinbaseTransaction:
         self.outputs = [TransactionOutput(address, amount)]
 
     async def verify(self):
-        from lib.VoxaCommunications_Router.stellaris.database import Database
+        from stellaris.database import Database
         block = await (await Database.get()).get_block(self.block_hash)
         return block['address'] == self.address and self.amount == block['reward']
 

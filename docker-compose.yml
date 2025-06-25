@@ -1,14 +1,14 @@
 services:
-  node:
-    image: voxacommunications-netnode:latest
-    container_name: voxacommunications-netnode
+  stellaris-node:
+    image: stellaris-node:latest
+    container_name: stellaris-node
+    tty: true
+    restart: unless-stopped
     environment:
-      - email=registry_email_here
-      - password=registry_password_here
-      - code=registry_code_here_optional
-      - env=production
+      - DATABASE_PATH=./data/database
+      - NODE_HOST=0.0.0.0
+      - NODE_PORT=5432
+      - DEFAULT_NODES=https://stellaris-node.connor33341.dev
+      - ENABLE_RATE_LIMITING=true
     ports:
-      - "9999:9999"
-      - "9000:9000"
-    volumes:
-      - ./config:/app/config
+      - "5432:5432"

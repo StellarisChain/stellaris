@@ -3,9 +3,9 @@ from io import BytesIO
 from typing import List
 
 from fastecdsa import keys
-from lib.VoxaCommunications_Router.stellaris.transactions import TransactionInput, TransactionOutput
-from lib.VoxaCommunications_Router.stellaris.constants import ENDIAN, SMALLEST, CURVE
-from lib.VoxaCommunications_Router.stellaris.utils.general import point_to_string, bytes_to_string, sha256
+from stellaris.transactions import TransactionInput, TransactionOutput
+from stellaris.constants import ENDIAN, SMALLEST, CURVE
+from stellaris.utils.general import point_to_string, bytes_to_string, sha256
 
 import struct
 
@@ -92,19 +92,19 @@ class Transaction:
         return True
 
     async def verify_double_spend(self):
-        from lib.VoxaCommunications_Router.stellaris.database import Database
+        from stellaris.database import Database
         check_inputs = [(tx_input.tx_hash, tx_input.index) for tx_input in self.inputs]
         unspent_outputs = await Database.instance.get_unspent_outputs(check_inputs)
         return set(check_inputs) == set(unspent_outputs)
 
     async def verify_double_spend_pending(self):
-        from lib.VoxaCommunications_Router.stellaris.database import Database
+        from stellaris.database import Database
         check_inputs = [(tx_input.tx_hash, tx_input.index) for tx_input in self.inputs]
         spent_outputs = await Database.instance.get_pending_spent_outputs(check_inputs)
         return spent_outputs == []
 
     async def _fill_transaction_inputs(self, txs=None) -> None:
-        from lib.VoxaCommunications_Router.stellaris.database import Database
+        from stellaris.database import Database
         check_inputs = [tx_input.tx_hash for tx_input in self.inputs if tx_input.transaction is None and tx_input.transaction_info is None]
         if not check_inputs:
             return
@@ -272,7 +272,7 @@ class Transaction:
         if specifier == 36:
             assert len(inputs) == 1 and len(outputs) == 1
             # Import here to avoid circular import
-            from lib.VoxaCommunications_Router.stellaris.transactions.coinbase_transaction import CoinbaseTransaction
+            from stellaris.transactions.coinbase_transaction import CoinbaseTransaction
             return CoinbaseTransaction(inputs[0].tx_hash, outputs[0].address, outputs[0].amount)
         else:
             if specifier == 1:
