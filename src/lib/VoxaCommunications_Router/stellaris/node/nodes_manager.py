@@ -30,8 +30,8 @@ class NodesManager:
     @staticmethod
     def init():
         NodesManager.db._loaddb()
-        NodesManager.nodes = NodesManager.db.get('nodes') or ['https://denaro-node.gaetano.eu.org']
-        NodesManager.last_messages = NodesManager.db.get('last_messages') or {'https://denaro-node.gaetano.eu.org': timestamp()}
+        NodesManager.nodes = NodesManager.db.get('nodes') or ['https://stellaris-node.connor33341.dev']
+        NodesManager.last_messages = NodesManager.db.get('last_messages') or {'https://stellaris-node.connor33341.dev': timestamp()}
 
     @staticmethod
     def sync():
