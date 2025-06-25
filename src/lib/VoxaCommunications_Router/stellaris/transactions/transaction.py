@@ -3,7 +3,7 @@ from io import BytesIO
 from typing import List
 
 from fastecdsa import keys
-from lib.VoxaCommunications_Router.stellaris.transactions import TransactionInput, TransactionOutput, CoinbaseTransaction
+from lib.VoxaCommunications_Router.stellaris.transactions import TransactionInput, TransactionOutput
 from lib.VoxaCommunications_Router.stellaris.constants import ENDIAN, SMALLEST, CURVE
 from lib.VoxaCommunications_Router.stellaris.utils.general import point_to_string, bytes_to_string, sha256
 
@@ -271,6 +271,8 @@ class Transaction:
         specifier = int.from_bytes(tx_bytes.read(1), ENDIAN)
         if specifier == 36:
             assert len(inputs) == 1 and len(outputs) == 1
+            # Import here to avoid circular import
+            from lib.VoxaCommunications_Router.stellaris.transactions.coinbase_transaction import CoinbaseTransaction
             return CoinbaseTransaction(inputs[0].tx_hash, outputs[0].address, outputs[0].amount)
         else:
             if specifier == 1:

@@ -185,10 +185,10 @@ async def startup():
     global db
     global config
     db = await Database.create(
-        user=config['DENARO_DATABASE_USER'] if 'DENARO_DATABASE_USER' in config else "denaro" ,
-        password=config['DENARO_DATABASE_PASSWORD'] if 'DENARO_DATABASE_PASSWORD' in config else 'denaro',
-        database=config['DENARO_DATABASE_NAME'] if 'DENARO_DATABASE_NAME' in config else "denaro",
-        host=config['DENARO_DATABASE_HOST'] if 'DENARO_DATABASE_HOST' in config else None
+        user=config['STELLARIS_DATABASE_USER'] if 'STELLARIS_DATABASE_USER' in config else "stellaris" ,
+        password=config['STELLARIS_DATABASE_PASSWORD'] if 'STELLARIS_DATABASE_PASSWORD' in config else 'stellaris',
+        database=config['STELLARIS_DATABASE_NAME'] if 'STELLARIS_DATABASE_NAME' in config else "stellaris",
+        host=config['STELLARIS_DATABASE_HOST'] if 'STELLARIS_DATABASE_HOST' in config else None
     )
 
 
