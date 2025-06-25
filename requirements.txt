@@ -23,6 +23,7 @@ fastecdsa>=2.3.2
 asyncpg~=0.29.0
 pickleDB~=0.9.2
 base58>=1.0.3
+slowapi
 starlette
 maturin
 pip-tools
