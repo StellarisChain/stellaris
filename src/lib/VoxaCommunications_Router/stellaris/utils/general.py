@@ -44,7 +44,17 @@ def byte_length(i: int):
 def normalize_block(block) -> dict:
     block = dict(block)
     block['address'] = block['address'].strip(' ')
-    block['timestamp'] = int(block['timestamp'].replace(tzinfo=timezone.utc).timestamp())
+    # Convert timestamp string to datetime, set timezone, then get timestamp
+    if isinstance(block['timestamp'], str):
+        # If it's a string, parse it as a datetime first
+        dt = datetime.fromisoformat(block['timestamp'].replace('Z', '+00:00'))
+        block['timestamp'] = int(dt.replace(tzinfo=timezone.utc).timestamp())
+    elif isinstance(block['timestamp'], datetime):
+        # If it's already a datetime object
+        block['timestamp'] = int(block['timestamp'].replace(tzinfo=timezone.utc).timestamp())
+    else:
+        # If it's already a number (timestamp), keep it as is
+        block['timestamp'] = int(block['timestamp'])
     return block
 
 
@@ -76,7 +86,7 @@ def bytes_to_point(point_bytes: bytes) -> Point:
     elif len(point_bytes) == 33:
         specifier = point_bytes[0]
         x = int.from_bytes(point_bytes[1:], ENDIAN)
-        return Point(x, x_to_y(x, specifier == 43))
+        return Point(x, x_to_y(x, specifier == 43), CURVE)
     else:
         raise NotImplementedError()
 
