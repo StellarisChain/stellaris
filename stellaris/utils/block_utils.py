@@ -3,8 +3,8 @@ from decimal import Decimal
 from io import BytesIO
 from math import ceil, floor, log
 from typing import Tuple, List, Union
-from lib.VoxaCommunications_Router.stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX
-from lib.VoxaCommunications_Router.stellaris.database import Database
+from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX
+from stellaris.database import Database
 
 BLOCK_TIME = 180
 BLOCKS_COUNT = Decimal(500)

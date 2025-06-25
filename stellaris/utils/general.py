@@ -11,7 +11,7 @@ import base58
 from fastecdsa.point import Point
 from fastecdsa.util import mod_sqrt
 
-from lib.VoxaCommunications_Router.stellaris.constants import ENDIAN, CURVE
+from stellaris.constants import ENDIAN, CURVE
 
 _print = print
 
@@ -127,7 +127,7 @@ def string_to_point(string: str) -> Point:
 
 
 async def transaction_to_json(tx, verify: bool = False, address: str = None):
-    from lib.VoxaCommunications_Router.stellaris.transactions import CoinbaseTransaction
+    from stellaris.transactions import CoinbaseTransaction
     if isinstance(tx, CoinbaseTransaction):
         transaction = {'is_coinbase': True, 'hash': tx.hash(), 'block_hash': tx.block_hash, 'outputs': []}
     else:
