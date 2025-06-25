@@ -7,8 +7,20 @@
 	"features": {
 		"ghcr.io/devcontainers-extra/features/pipenv:2": {},
 		"ghcr.io/devcontainers-extra/features/pipx-package:1": {},
-		"ghcr.io/itsmechlark/features/redis-server:1": {}
-	}
+		"ghcr.io/itsmechlark/features/redis-server:1": {},
+		"ghcr.io/devcontainers/features/rust:1": {}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.vscode-pylance"
+			]
+		}
+	},
+
+	"runArgs": [
+		"--network=voxacommunications-backend_default"
+	],
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
@@ -17,11 +29,10 @@
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "pip3 install --user -r requirements.txt",
+	"postCreateCommand": "cargo install --git https://github.com/RustPython/RustPython rustpython",
 
 	// Configure tool-specific properties.
 	// "customizations": {},
 
-	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
+	"remoteUser": "root"
 }

@@ -1,9 +1,0 @@
-{
-    "port": 3000,
-    "host": "0.0.0.0",
-    "maxPeers": 100,
-    "maxInboundConnections": 50,
-    "maxOutboundConnections": 50,
-    "maxMessageSize": 1048576,
-    "maxMessageRate": 1000
-}

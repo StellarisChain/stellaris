@@ -7,5 +7,17 @@ flag.txt
 grok.txt
 install-docker.sh
 secret.txt
-# Will be rewritten
-TESTING.md
+/data
+build
+dist
+todo.txt
+testoutput
+*.out
+benchmarks
+target
+# Pre-Production files
+*.test.py
+json-loader.sh
+dev-configs
+stellaris-prototype
+stellaris-prototype-v2

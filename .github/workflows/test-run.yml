@@ -1,0 +1,45 @@
+name: Test Application Startup
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test-startup:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Test application startup
+      run: bash tests/test_startup.sh
+      timeout-minutes: 5
+      
+    - name: Verify configuration files exist
+      run: |
+        echo "Checking required configuration files..."
+        if [ ! -f "config/p2p.json" ]; then
+          echo "❌ Missing config/p2p.json"
+          exit 1
+        fi
+        if [ ! -f "requirements.txt" ]; then
+          echo "❌ Missing requirements.txt"
+          exit 1
+        fi
+        echo "✅ All required configuration files exist"
+        
+    - name: Validate Python syntax
+      run: |
+        echo "Validating Python syntax..."
+        python -m py_compile src/main.py
+        find src -name "*.py" -exec python -m py_compile {} \;
+        echo "✅ Python syntax validation passed"
