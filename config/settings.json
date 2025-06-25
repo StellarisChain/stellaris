@@ -20,6 +20,6 @@
         "enable-upnpc-port-forwarding": true,
         "enable-ssu": true,
         "enable-dns": true,
-        "enable-app-deployment": true
+        "enable-app-deployment": false
     }
 }

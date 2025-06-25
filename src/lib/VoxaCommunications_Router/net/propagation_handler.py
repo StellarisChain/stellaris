@@ -18,6 +18,7 @@ class PropagationHandler:
         self.logger = log()
         self.net_manager: NetManager = get_global_net_manager()
         self.ssu_node: SSUNode = self.net_manager.ssu_node
+        self.setup_hooks()
     
     def setup_hooks(self) -> None:
         """
@@ -142,3 +143,21 @@ class PropagationHandler:
         self.logger.debug(f"Sending propagation request: {ssu_request.request_id}")
         await self.ssu_node.send_ssu_request(ssu_request)
         self.logger.info(f"Sent propagation packet: {packet}")
+
+global_propagation_handler: Optional[PropagationHandler] = None
+
+def get_global_propagation_handler() -> PropagationHandler:
+    """
+    Get the global instance of PropagationHandler.
+    """
+    return global_propagation_handler
+
+def set_global_propagation_handler(handler: PropagationHandler) -> None:
+    """
+    Set the global instance of PropagationHandler.
+    """
+    global global_propagation_handler
+    if not isinstance(handler, PropagationHandler):
+        raise TypeError("Handler must be an instance of PropagationHandler")
+    global_propagation_handler = handler
+    global_propagation_handler.logger.info("Global PropagationHandler set successfully")
