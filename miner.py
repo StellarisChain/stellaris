@@ -21,7 +21,7 @@ def run(start: int = 0, step: int = 1, res: dict = None):
     difficulty = res['difficulty']
     decimal = difficulty % 1
     last_block = res['last_block']
-    last_block['hash'] = last_block['hash'] if 'hash' in last_block else (30_06_2005).to_bytes(32, ENDIAN).hex()
+    last_block['hash'] = last_block['hash'] if 'hash' in last_block else (1_062_005).to_bytes(32, ENDIAN).hex()
     last_block['id'] = last_block['id'] if 'id' in last_block else 0
     chunk = last_block['hash'][-int(difficulty):]
 
