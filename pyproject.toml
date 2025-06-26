@@ -1,0 +1,146 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stellaris-chain"
+version = "0.1.0"
+description = "A blockchain implementation in Python"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Stellaris Chain Team"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Security :: Cryptography",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.11.5",
+    "fastapi>=0.115.12",
+    "httpx==0.28.1",
+    "aiohttp>=3.8.0",
+    "requests>=2.28.0",
+    "uvicorn>=0.34.2",
+    "cryptography>=45.0.3",
+    "colorama==0.4.6",
+    "python-dotenv>=0.9.9",
+    "rsa>=4.9.1",
+    "psutil>=7.0.0",
+    "kytan-py>=0.1.0",
+    "modern-benchmark>=0.1.0",
+    "libp2p>=0.2.8",
+    "miniupnpc>=2.3.3",
+    "pystun3>=2.0.0",
+    "docker>=7.0.0",
+    "fastecdsa>=2.3.2",
+    "asyncpg~=0.29.0",
+    "pickleDB~=0.9.2",
+    "base58>=1.0.3",
+    "slowapi",
+    "starlette",
+    "kvprocessor>=0.2.14",
+    "p2pd",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy==1.16.0",
+    "pytest==8.3.5",
+    "maturin",
+    "pip-tools",
+]
+
+[project.urls]
+Homepage = "https://github.com/StellarisChain/stellaris"
+Repository = "https://github.com/StellarisChain/stellaris"
+Issues = "https://github.com/StellarisChain/stellaris/issues"
+
+[project.scripts]
+stellaris-node = "stellaris.node.main:main"
+stellaris-miner = "miner:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["stellaris*"]
+exclude = ["tests*", "docs*"]
+
+[tool.setuptools.package-data]
+stellaris = ["node/nodes.json", "scripts/*"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 88
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["stellaris"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
