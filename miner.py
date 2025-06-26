@@ -74,6 +74,10 @@ def run(start: int = 0, step: int = 1, res: dict = None):
             print(res := r.json())
             if res['ok']:
                 print('BLOCK MINED\n\n')
+                # Wait for the node to process the block before exiting
+                # This prevents race conditions where we restart mining
+                # before the pending transactions are cleared
+                #time.sleep(2)
             exit()
 
 
@@ -113,3 +117,7 @@ if __name__ == '__main__':
                 break
         for p in processes:
             p.kill()
+        
+        # Add a short delay before restarting to allow network propagation
+        # and prevent mining the same transactions immediately
+        time.sleep(3)
