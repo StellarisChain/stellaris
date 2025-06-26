@@ -81,8 +81,8 @@ def worker(start: int, step: int, res: dict):
     while True:
         try:
             run(start, step, res)
-        except Exception:
-            raise
+        except Exception as e:
+            print(f"Worker {start + 1} error: {e}")
             time.sleep(3)
 
 
