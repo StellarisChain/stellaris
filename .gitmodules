@@ -1,0 +1,3 @@
+[submodule "modules/svm"]
+	path = modules/svm
+	url = https://github.com/StellarisChain/svm.git
