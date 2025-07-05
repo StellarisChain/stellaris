@@ -28,7 +28,7 @@ class Transaction:
                 version = 3
             else:
                 raise NotImplementedError()
-        if version > 3:
+        if version > 4:
             raise NotImplementedError()
         self.version = version
         
@@ -246,7 +246,7 @@ class Transaction:
 
         tx_bytes = BytesIO(bytes.fromhex(hexstring))
         version = int.from_bytes(tx_bytes.read(1), ENDIAN)
-        if version > 3:
+        if version > 4:
             raise NotImplementedError()
 
         inputs_count = int.from_bytes(tx_bytes.read(1), ENDIAN)
@@ -310,6 +310,12 @@ class Transaction:
                     for tx_input in index[list(index.keys())[i]]:
                         tx_input.signed = signed
 
+            # Check if this is an IBC transaction (version 4)
+            if version == 4:
+                # Import here to avoid circular import
+                from stellaris.ibc.transaction import IBCTransaction
+                return await IBCTransaction.from_hex(hexstring)
+            
             return Transaction(inputs, outputs, message, version)#, timestamp)
 
     def __eq__(self, other):
