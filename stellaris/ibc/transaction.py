@@ -41,35 +41,79 @@ class IBCTransaction(Transaction):
         Create IBC transaction from hex string.
         Overrides parent method to handle IBC-specific deserialization.
         """
-        # First create as regular transaction
-        regular_tx = await Transaction.from_hex(hex_string)
+        # Parse hex string manually to avoid recursion
+        from io import BytesIO
+        from stellaris.constants import ENDIAN
+        from stellaris.transactions import TransactionInput, TransactionOutput
+        from stellaris.utils.general import bytes_to_string
+        from decimal import Decimal
+        from stellaris.constants import SMALLEST
+        import json
+        
+        tx_bytes = BytesIO(bytes.fromhex(hex_string))
+        version = int.from_bytes(tx_bytes.read(1), ENDIAN)
         
         # Check if this is an IBC transaction (version 4)
-        if regular_tx.version != 4:
-            raise ValueError(f"Not an IBC transaction (version {regular_tx.version})")
-        
+        if version != 4:
+            raise ValueError(f"Not an IBC transaction (version {version})")
+
+        inputs_count = int.from_bytes(tx_bytes.read(1), ENDIAN)
+        inputs = []
+
+        for i in range(0, inputs_count):
+            tx_hex = tx_bytes.read(32).hex()
+            tx_index = int.from_bytes(tx_bytes.read(1), ENDIAN)
+            inputs.append(TransactionInput(tx_hex, index=tx_index))
+
+        outputs_count = int.from_bytes(tx_bytes.read(1), ENDIAN)
+        outputs = []
+
+        for i in range(0, outputs_count):
+            pubkey = tx_bytes.read(33)  # Version 4 uses 33-byte keys
+            amount_length = int.from_bytes(tx_bytes.read(1), ENDIAN)
+            amount = int.from_bytes(tx_bytes.read(amount_length), ENDIAN) / Decimal(SMALLEST)
+            outputs.append(TransactionOutput(bytes_to_string(pubkey), amount))
+
+        specifier = int.from_bytes(tx_bytes.read(1), ENDIAN)
+        if specifier == 1:
+            message_length = int.from_bytes(tx_bytes.read(2), ENDIAN)  # Version 4 uses 2 bytes
+            message = tx_bytes.read(message_length)
+        else:
+            raise ValueError("IBC transactions must have a message")
+
         # Deserialize IBC message from transaction message
-        if regular_tx.message is None:
-            raise ValueError("IBC transaction missing message data")
-        
         try:
-            message_dict = json.loads(regular_tx.message.decode('utf-8'))
+            message_dict = json.loads(message.decode('utf-8'))
             ibc_message = create_message_from_dict(message_dict)
         except Exception as e:
             raise ValueError(f"Failed to deserialize IBC message: {e}")
         
+        # Read signatures
+        signatures = []
+        while True:
+            try:
+                signed = (int.from_bytes(tx_bytes.read(32), ENDIAN), int.from_bytes(tx_bytes.read(32), ENDIAN))
+                if signed[0] == 0:
+                    break
+                signatures.append(signed)
+            except:
+                break
+
+        # Set signatures on inputs
+        if len(signatures) == 1:
+            for tx_input in inputs:
+                tx_input.signed = signatures[0]
+        elif len(inputs) == len(signatures):
+            for i, tx_input in enumerate(inputs):
+                tx_input.signed = signatures[i]
+        
         # Create IBC transaction
         ibc_tx = cls(
-            inputs=regular_tx.inputs,
-            outputs=regular_tx.outputs,
+            inputs=inputs,
+            outputs=outputs,
             ibc_message=ibc_message,
-            version=regular_tx.version
+            version=version
         )
-        
-        # Copy over computed fields
-        ibc_tx._hex = regular_tx._hex
-        ibc_tx.fees = regular_tx.fees
-        ibc_tx.tx_hash = regular_tx.tx_hash
         
         return ibc_tx
     
@@ -92,8 +136,13 @@ class IBCTransaction(Transaction):
                 return False
             
             # Verify message type is supported
-            from stellaris.ibc.messages import MESSAGE_TYPES
-            if self.ibc_message.type not in MESSAGE_TYPES:
+            supported_types = [
+                "client_create", "client_update",
+                "connection_open_init", "connection_open_try", "connection_open_ack", "connection_open_confirm",
+                "channel_open_init", "channel_open_try", "channel_open_ack", "channel_open_confirm",
+                "packet_send", "packet_receive", "packet_ack", "packet_timeout"
+            ]
+            if self.ibc_message.type not in supported_types:
                 return False
             
             # Verify message data is valid

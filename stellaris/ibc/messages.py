@@ -246,29 +246,118 @@ class PacketTimeoutMessage(IBCMessage):
             }
         )
 
-# Message registry for deserialization
-MESSAGE_TYPES = {
-    "client_create": ClientCreateMessage,
-    "client_update": ClientUpdateMessage,
-    "connection_open_init": ConnectionOpenInitMessage,
-    "connection_open_try": ConnectionOpenTryMessage,
-    "connection_open_ack": ConnectionOpenAckMessage,
-    "connection_open_confirm": ConnectionOpenConfirmMessage,
-    "channel_open_init": ChannelOpenInitMessage,
-    "channel_open_try": ChannelOpenTryMessage,
-    "channel_open_ack": ChannelOpenAckMessage,
-    "channel_open_confirm": ChannelOpenConfirmMessage,
-    "packet_send": PacketSendMessage,
-    "packet_receive": PacketReceiveMessage,
-    "packet_ack": PacketAckMessage,
-    "packet_timeout": PacketTimeoutMessage,
-}
-
 def create_message_from_dict(msg_dict: Dict[str, Any]) -> IBCMessage:
     """Factory function to create appropriate message type from dictionary"""
     msg_type = msg_dict["type"]
-    if msg_type in MESSAGE_TYPES:
-        # Create message with the data directly
-        return MESSAGE_TYPES[msg_type](type=msg_type, data=msg_dict["data"])
+    data = msg_dict["data"]
+    
+    if msg_type == "client_create":
+        return ClientCreateMessage(
+            client_id=data["client_id"],
+            client_type=data["client_type"],
+            consensus_state=data["consensus_state"],
+            client_state=data["client_state"]
+        )
+    elif msg_type == "client_update":
+        return ClientUpdateMessage(
+            client_id=data["client_id"],
+            header=data["header"]
+        )
+    elif msg_type == "connection_open_init":
+        return ConnectionOpenInitMessage(
+            connection_id=data["connection_id"],
+            client_id=data["client_id"],
+            counterparty_client_id=data["counterparty_client_id"],
+            counterparty_connection_id=data.get("counterparty_connection_id", ""),
+            version=data.get("version", "1")
+        )
+    elif msg_type == "connection_open_try":
+        return ConnectionOpenTryMessage(
+            connection_id=data["connection_id"],
+            client_id=data["client_id"],
+            counterparty_client_id=data["counterparty_client_id"],
+            counterparty_connection_id=data["counterparty_connection_id"],
+            version=data["version"],
+            proof=data["proof"],
+            proof_height=data["proof_height"]
+        )
+    elif msg_type == "connection_open_ack":
+        return ConnectionOpenAckMessage(
+            connection_id=data["connection_id"],
+            counterparty_connection_id=data["counterparty_connection_id"],
+            version=data["version"],
+            proof=data["proof"],
+            proof_height=data["proof_height"]
+        )
+    elif msg_type == "connection_open_confirm":
+        return ConnectionOpenConfirmMessage(
+            connection_id=data["connection_id"],
+            proof=data["proof"],
+            proof_height=data["proof_height"]
+        )
+    elif msg_type == "channel_open_init":
+        return ChannelOpenInitMessage(
+            port_id=data["port_id"],
+            channel_id=data["channel_id"],
+            counterparty_port_id=data["counterparty_port_id"],
+            counterparty_channel_id=data.get("counterparty_channel_id", ""),
+            connection_id=data["connection_id"],
+            version=data["version"]
+        )
+    elif msg_type == "channel_open_try":
+        return ChannelOpenTryMessage(
+            port_id=data["port_id"],
+            channel_id=data["channel_id"],
+            counterparty_port_id=data["counterparty_port_id"],
+            counterparty_channel_id=data["counterparty_channel_id"],
+            connection_id=data["connection_id"],
+            version=data["version"],
+            proof=data["proof"],
+            proof_height=data["proof_height"]
+        )
+    elif msg_type == "channel_open_ack":
+        return ChannelOpenAckMessage(
+            port_id=data["port_id"],
+            channel_id=data["channel_id"],
+            counterparty_version=data["counterparty_version"],
+            proof=data["proof"],
+            proof_height=data["proof_height"]
+        )
+    elif msg_type == "channel_open_confirm":
+        return ChannelOpenConfirmMessage(
+            port_id=data["port_id"],
+            channel_id=data["channel_id"],
+            proof=data["proof"],
+            proof_height=data["proof_height"]
+        )
+    elif msg_type == "packet_send":
+        return PacketSendMessage(
+            source_port=data["source_port"],
+            source_channel=data["source_channel"],
+            dest_port=data["dest_port"],
+            dest_channel=data["dest_channel"],
+            data=bytes.fromhex(data["data"]),
+            timeout_height=data["timeout_height"],
+            timeout_timestamp=data["timeout_timestamp"]
+        )
+    elif msg_type == "packet_receive":
+        return PacketReceiveMessage(
+            packet=data["packet"],
+            proof=data["proof"],
+            proof_height=data["proof_height"]
+        )
+    elif msg_type == "packet_ack":
+        return PacketAckMessage(
+            packet=data["packet"],
+            acknowledgement=bytes.fromhex(data["acknowledgement"]),
+            proof=data["proof"],
+            proof_height=data["proof_height"]
+        )
+    elif msg_type == "packet_timeout":
+        return PacketTimeoutMessage(
+            packet=data["packet"],
+            proof=data["proof"],
+            proof_height=data["proof_height"]
+        )
     else:
         raise ValueError(f"Unknown IBC message type: {msg_type}")
