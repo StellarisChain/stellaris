@@ -29,8 +29,11 @@ from stellaris.manager import create_block, get_difficulty, Manager, get_transac
 from stellaris.node.nodes_manager import NodesManager, NodeInterface
 from stellaris.node.utils import ip_is_local
 from stellaris.transactions import Transaction, CoinbaseTransaction
+from stellaris.ibc.transaction import IBCTransaction
 from stellaris.database import Database
 from stellaris.constants import VERSION, ENDIAN
+from stellaris.ibc import IBCState, IBCClient, IBCConnection, IBCChannel, IBCPacket
+from stellaris.ibc.messages import *
 
 
 limiter = Limiter(key_func=get_remote_address)
@@ -42,6 +45,13 @@ NodesManager.init()
 started = False
 is_syncing = False
 self_url = None
+
+# IBC components
+ibc_state: IBCState = None
+ibc_client: IBCClient = None
+ibc_connection: IBCConnection = None
+ibc_channel: IBCChannel = None
+ibc_packet: IBCPacket = None
 
 #print = ic
 
@@ -182,14 +192,22 @@ async def sync_blockchain(node_url: str = None):
 
 @app.on_event("startup")
 async def startup():
-    global db
-    global config
+    global db, config
+    global ibc_state, ibc_client, ibc_connection, ibc_channel, ibc_packet
+    
     db = await Database.create(
         user=config['STELLARIS_DATABASE_USER'] if 'STELLARIS_DATABASE_USER' in config else "stellaris" ,
         password=config['STELLARIS_DATABASE_PASSWORD'] if 'STELLARIS_DATABASE_PASSWORD' in config else 'stellaris',
         database=config['STELLARIS_DATABASE_NAME'] if 'STELLARIS_DATABASE_NAME' in config else "stellaris",
         host=config['STELLARIS_DATABASE_HOST'] if 'STELLARIS_DATABASE_HOST' in config else None
     )
+    
+    # Initialize IBC components
+    ibc_state = IBCState(db)
+    ibc_client = IBCClient(ibc_state)
+    ibc_connection = IBCConnection(ibc_state, ibc_client)
+    ibc_channel = IBCChannel(ibc_state, ibc_connection)
+    ibc_packet = IBCPacket(ibc_state, ibc_channel)
 
 
 @app.get("/")
@@ -488,6 +506,296 @@ async def get_blocks(request: Request, offset: int, limit: int = Query(default=.
     blocks = await db.get_blocks(offset, limit)
     result = {'ok': True, 'result': blocks}
     return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+
+
+# IBC Endpoints
+
+@app.post("/ibc/client/create")
+async def ibc_client_create(request: Request, background_tasks: BackgroundTasks, body=Body(...)):
+    """Create a new IBC client"""
+    try:
+        msg = ClientCreateMessage(
+            client_id=body['client_id'],
+            client_type=body['client_type'],
+            consensus_state=body['consensus_state'],
+            client_state=body['client_state']
+        )
+        
+        # Create IBC transaction
+        # For now, create with empty inputs/outputs (fees would be handled differently)
+        ibc_tx = IBCTransaction(inputs=[], outputs=[], ibc_message=msg)
+        
+        # Add to pending transactions
+        if await db.add_pending_transaction(ibc_tx):
+            # Propagate to other nodes
+            background_tasks.add_task(propagate, 'push_tx', {'tx_hex': ibc_tx.hex()})
+            
+            # Also execute the IBC logic locally
+            success = await ibc_client.create_client(
+                body['client_id'],
+                body['client_type'],
+                body['consensus_state'],
+                body['client_state']
+            )
+            
+            return {'ok': True, 'result': 'IBC client create transaction submitted', 'executed': success}
+        else:
+            return {'ok': False, 'error': 'Failed to add IBC transaction'}
+            
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.post("/ibc/client/update")
+async def ibc_client_update(request: Request, background_tasks: BackgroundTasks, body=Body(...)):
+    """Update an existing IBC client"""
+    try:
+        msg = ClientUpdateMessage(
+            client_id=body['client_id'],
+            header=body['header']
+        )
+        
+        # Create IBC transaction
+        ibc_tx = IBCTransaction(inputs=[], outputs=[], ibc_message=msg)
+        
+        # Add to pending transactions
+        if await db.add_pending_transaction(ibc_tx):
+            # Propagate to other nodes
+            background_tasks.add_task(propagate, 'push_tx', {'tx_hex': ibc_tx.hex()})
+            
+            # Also execute the IBC logic locally
+            success = await ibc_client.update_client(body['client_id'], body['header'])
+            
+            return {'ok': True, 'result': 'IBC client update transaction submitted', 'executed': success}
+        else:
+            return {'ok': False, 'error': 'Failed to add IBC transaction'}
+            
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.get("/ibc/client/{client_id}")
+async def ibc_client_get(client_id: str):
+    """Get IBC client state"""
+    try:
+        client = await ibc_client.get_client(client_id)
+        if client:
+            return {'ok': True, 'result': client.to_dict()}
+        else:
+            return {'ok': False, 'error': 'Client not found'}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.post("/ibc/connection/open_init")
+async def ibc_connection_open_init(request: Request, background_tasks: BackgroundTasks, body=Body(...)):
+    """Initialize IBC connection opening"""
+    try:
+        msg = ConnectionOpenInitMessage(
+            connection_id=body['connection_id'],
+            client_id=body['client_id'],
+            counterparty_client_id=body['counterparty_client_id'],
+            counterparty_connection_id=body.get('counterparty_connection_id', ''),
+            version=body.get('version', '1')
+        )
+        
+        # Create IBC transaction
+        ibc_tx = IBCTransaction(inputs=[], outputs=[], ibc_message=msg)
+        
+        # Add to pending transactions
+        if await db.add_pending_transaction(ibc_tx):
+            # Propagate to other nodes
+            background_tasks.add_task(propagate, 'push_tx', {'tx_hex': ibc_tx.hex()})
+            
+            # Also execute the IBC logic locally
+            success = await ibc_connection.connection_open_init(
+                body['connection_id'],
+                body['client_id'],
+                body['counterparty_client_id'],
+                body.get('version', '1')
+            )
+            
+            return {'ok': True, 'result': 'IBC connection open init transaction submitted', 'executed': success}
+        else:
+            return {'ok': False, 'error': 'Failed to add IBC transaction'}
+            
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.post("/ibc/connection/open_try")
+async def ibc_connection_open_try(request: Request, background_tasks: BackgroundTasks, body=Body(...)):
+    """Try to open IBC connection"""
+    try:
+        msg = ConnectionOpenTryMessage(
+            connection_id=body['connection_id'],
+            client_id=body['client_id'],
+            counterparty_client_id=body['counterparty_client_id'],
+            counterparty_connection_id=body['counterparty_connection_id'],
+            version=body['version'],
+            proof=body['proof'],
+            proof_height=body['proof_height']
+        )
+        
+        # Create IBC transaction
+        ibc_tx = IBCTransaction(inputs=[], outputs=[], ibc_message=msg)
+        
+        # Add to pending transactions
+        if await db.add_pending_transaction(ibc_tx):
+            # Propagate to other nodes
+            background_tasks.add_task(propagate, 'push_tx', {'tx_hex': ibc_tx.hex()})
+            
+            # Also execute the IBC logic locally
+            success = await ibc_connection.connection_open_try(
+                body['connection_id'],
+                body['client_id'],
+                body['counterparty_client_id'],
+                body['counterparty_connection_id'],
+                body['version'],
+                body['proof'],
+                body['proof_height']
+            )
+            
+            return {'ok': True, 'result': 'IBC connection open try transaction submitted', 'executed': success}
+        else:
+            return {'ok': False, 'error': 'Failed to add IBC transaction'}
+            
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.get("/ibc/connection/{connection_id}")
+async def ibc_connection_get(connection_id: str):
+    """Get IBC connection state"""
+    try:
+        connection = await ibc_connection.get_connection(connection_id)
+        if connection:
+            return {'ok': True, 'result': connection.to_dict()}
+        else:
+            return {'ok': False, 'error': 'Connection not found'}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.post("/ibc/channel/open_init")
+async def ibc_channel_open_init(request: Request, background_tasks: BackgroundTasks, body=Body(...)):
+    """Initialize IBC channel opening"""
+    try:
+        msg = ChannelOpenInitMessage(
+            port_id=body['port_id'],
+            channel_id=body['channel_id'],
+            counterparty_port_id=body['counterparty_port_id'],
+            counterparty_channel_id=body.get('counterparty_channel_id', ''),
+            connection_id=body['connection_id'],
+            version=body['version']
+        )
+        
+        # Create IBC transaction
+        ibc_tx = IBCTransaction(inputs=[], outputs=[], ibc_message=msg)
+        
+        # Add to pending transactions
+        if await db.add_pending_transaction(ibc_tx):
+            # Propagate to other nodes
+            background_tasks.add_task(propagate, 'push_tx', {'tx_hex': ibc_tx.hex()})
+            
+            # Also execute the IBC logic locally
+            success = await ibc_channel.channel_open_init(
+                body['port_id'],
+                body['channel_id'],
+                body['counterparty_port_id'],
+                body['connection_id'],
+                body['version'],
+                body.get('ordering', 'UNORDERED')
+            )
+            
+            return {'ok': True, 'result': 'IBC channel open init transaction submitted', 'executed': success}
+        else:
+            return {'ok': False, 'error': 'Failed to add IBC transaction'}
+            
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.get("/ibc/channel/{port_id}/{channel_id}")
+async def ibc_channel_get(port_id: str, channel_id: str):
+    """Get IBC channel state"""
+    try:
+        channel = await ibc_channel.get_channel(port_id, channel_id)
+        if channel:
+            return {'ok': True, 'result': channel.to_dict()}
+        else:
+            return {'ok': False, 'error': 'Channel not found'}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.post("/ibc/packet/send")
+async def ibc_packet_send(request: Request, background_tasks: BackgroundTasks, body=Body(...)):
+    """Send IBC packet"""
+    try:
+        # Convert data from hex to bytes
+        data = bytes.fromhex(body['data'])
+        
+        msg = PacketSendMessage(
+            source_port=body['source_port'],
+            source_channel=body['source_channel'],
+            dest_port=body['dest_port'],
+            dest_channel=body['dest_channel'],
+            data=data,
+            timeout_height=body['timeout_height'],
+            timeout_timestamp=body['timeout_timestamp']
+        )
+        
+        # Create IBC transaction
+        ibc_tx = IBCTransaction(inputs=[], outputs=[], ibc_message=msg)
+        
+        # Add to pending transactions
+        if await db.add_pending_transaction(ibc_tx):
+            # Propagate to other nodes
+            background_tasks.add_task(propagate, 'push_tx', {'tx_hex': ibc_tx.hex()})
+            
+            # Also execute the IBC logic locally
+            sequence = await ibc_packet.send_packet(
+                body['source_port'],
+                body['source_channel'],
+                body['dest_port'],
+                body['dest_channel'],
+                data,
+                body['timeout_height'],
+                body['timeout_timestamp']
+            )
+            
+            return {'ok': True, 'result': 'IBC packet send transaction submitted', 'sequence': sequence}
+        else:
+            return {'ok': False, 'error': 'Failed to add IBC transaction'}
+            
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.post("/ibc/packet/receive")
+async def ibc_packet_receive(request: Request, background_tasks: BackgroundTasks, body=Body(...)):
+    """Receive IBC packet"""
+    try:
+        msg = PacketReceiveMessage(
+            packet=body['packet'],
+            proof=body['proof'],
+            proof_height=body['proof_height']
+        )
+        
+        # Create IBC transaction
+        ibc_tx = IBCTransaction(inputs=[], outputs=[], ibc_message=msg)
+        
+        # Add to pending transactions
+        if await db.add_pending_transaction(ibc_tx):
+            # Propagate to other nodes
+            background_tasks.add_task(propagate, 'push_tx', {'tx_hex': ibc_tx.hex()})
+            
+            # Also execute the IBC logic locally
+            success = await ibc_packet.receive_packet(
+                body['packet'],
+                body['proof'],
+                body['proof_height']
+            )
+            
+            return {'ok': True, 'result': 'IBC packet receive transaction submitted', 'executed': success}
+        else:
+            return {'ok': False, 'error': 'Failed to add IBC transaction'}
+            
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):
