@@ -55,6 +55,87 @@ app.add_middleware(
 
 config = dotenv_values(".env")
 
+async def sync_contracts_in_background():
+    """Background task to sync contracts from other nodes"""
+    try:
+        nodes = NodesManager.get_recent_nodes()
+        if not nodes:
+            return
+        
+        # Pick a random node to sync from
+        import random
+        node_url = random.choice(nodes)
+        
+        node_interface = NodeInterface(node_url)
+        response = await node_interface.request('get_contracts')
+        
+        if response.get('ok') and response.get('result'):
+            network_contracts = response['result']
+            local_contracts = await db.get_all_contracts()
+            
+            # Add any missing contracts
+            for contract_addr, contract_data in network_contracts.items():
+                if contract_addr not in local_contracts:
+                    await db.add_contract(contract_addr, contract_data)
+                    
+    except Exception as e:
+        # Silent failure for background task
+        pass
+
+
+async def sync_contracts_after_block():
+    """Synchronize contracts after a block containing BPF transactions is processed"""
+    try:
+        # Give a short delay to allow the block to be fully processed
+        import asyncio
+        await asyncio.sleep(1)
+        
+        # Get all contracts from other nodes
+        nodes = NodesManager.get_recent_nodes()
+        
+        for node_url in nodes:
+            try:
+                node_interface = NodeInterface(node_url)
+                response = await node_interface.request('get_contracts')
+                
+                if response.get('ok') and response.get('result'):
+                    network_contracts = response['result']
+                    local_contracts = await db.get_all_contracts()
+                    
+                    # Add any missing contracts
+                    for contract_addr, contract_data in network_contracts.items():
+                        if contract_addr not in local_contracts:
+                            await db.add_contract(contract_addr, contract_data)
+                            
+            except Exception as e:
+                print(f"Failed to sync contracts from {node_url}: {e}")
+                continue
+                
+    except Exception as e:
+        print(f"Contract synchronization failed: {e}")
+
+
+async def fetch_contract_from_network(contract_address: str) -> dict:
+    """Fetch contract data from other nodes in the network"""
+    nodes = NodesManager.get_recent_nodes()
+    
+    for node_url in nodes:
+        try:
+            node_interface = NodeInterface(node_url)
+            response = await node_interface.request('get_contract', {'contract_address': contract_address})
+            
+            if response.get('ok') and response.get('result'):
+                contract_data = response['result']
+                # Store contract locally for future use
+                await db.add_contract(contract_address, contract_data)
+                return contract_data
+        except Exception as e:
+            print(f"Failed to fetch contract from {node_url}: {e}")
+            continue
+    
+    return None
+
+
 async def propagate(path: str, args: dict, ignore_url=None, nodes: list = None):
     global self_url
     self_node = NodeInterface(self_url or '')
@@ -253,6 +334,15 @@ async def middleware(request: Request, call_next):
             except:
                 pass
     propagate_txs = await db.get_need_propagate_transactions()
+    
+    # Periodically sync contracts (every 100 requests approximately)
+    import random
+    if random.randint(1, 100) == 1:
+        try:
+            await sync_contracts_in_background()
+        except:
+            pass
+    
     try:
         response = await call_next(request)
         response.headers['Access-Control-Allow-Origin'] = '*'
@@ -357,6 +447,12 @@ async def push_block(request: Request, background_tasks: BackgroundTasks, block_
         'txs': [tx.hex() for tx in final_transactions] if len(final_transactions) < 10 else txs,
         'block_no': block_no
     })
+    
+    # Check if block contains BPF contract transactions and sync contracts if needed
+    has_contract_transactions = any(isinstance(tx, BPFContractTransaction) for tx in final_transactions)
+    if has_contract_transactions:
+        background_tasks.add_task(sync_contracts_after_block)
+    
     return {'ok': True}
 
 
@@ -499,7 +595,8 @@ async def deploy_contract(request: Request,
                          inputs: list = Body(...),
                          outputs: list = Body(...),
                          gas_limit: int = Body(default=100000),
-                         private_keys: list = Body(default=[])):
+                         private_keys: list = Body(default=[]),
+                         background_tasks: BackgroundTasks = BackgroundTasks()):
     """Deploy a new BPF contract"""
     try:
         # Validate inputs
@@ -548,8 +645,10 @@ async def deploy_contract(request: Request,
         if private_keys:
             contract_tx.sign(private_keys)
         
-        # Add to pending transactions
+        # Add to pending transactions and propagate to network
         if await db.add_pending_transaction(contract_tx):
+            # Propagate transaction to network
+            background_tasks.add_task(propagate, 'push_tx', {'tx_hex': contract_tx.hex()})
             return {'ok': True, 'tx_hash': contract_tx.hash()}
         else:
             return {'ok': False, 'error': 'Failed to add contract deployment transaction'}
@@ -567,13 +666,17 @@ async def call_contract(request: Request,
                        inputs: list = Body(...),
                        outputs: list = Body(...),
                        gas_limit: int = Body(default=100000),
-                       private_keys: list = Body(default=[])):
+                       private_keys: list = Body(default=[]),
+                       background_tasks: BackgroundTasks = BackgroundTasks()):
     """Call a BPF contract function"""
     try:
-        # Validate contract exists
+        # Validate contract exists locally, or try to fetch from network
         contract_data = await db.get_contract(contract_address)
         if not contract_data:
-            return {'ok': False, 'error': 'Contract not found'}
+            # Try to fetch contract from network nodes
+            contract_data = await fetch_contract_from_network(contract_address)
+            if not contract_data:
+                return {'ok': False, 'error': 'Contract not found on network'}
         
         # Create transaction inputs and outputs
         from stellaris.transactions import TransactionInput, TransactionOutput
@@ -612,8 +715,10 @@ async def call_contract(request: Request,
         if private_keys:
             contract_tx.sign(private_keys)
         
-        # Add to pending transactions
+        # Add to pending transactions and propagate to network
         if await db.add_pending_transaction(contract_tx):
+            # Propagate transaction to network
+            background_tasks.add_task(propagate, 'push_tx', {'tx_hex': contract_tx.hex()})
             return {'ok': True, 'tx_hash': contract_tx.hash()}
         else:
             return {'ok': False, 'error': 'Failed to add contract call transaction'}
@@ -679,6 +784,65 @@ async def estimate_gas(request: Request,
         return {'ok': True, 'gas_estimate': gas_estimate}
     except Exception as e:
         return {'ok': False, 'error': f'Gas estimation failed: {str(e)}'}
+
+
+@app.get("/sync_contracts")
+@limiter.limit("5/minute")
+async def sync_contracts(request: Request, background_tasks: BackgroundTasks):
+    """Synchronize contracts from other nodes in the network"""
+    try:
+        nodes = NodesManager.get_recent_nodes()
+        synced_contracts = 0
+        
+        for node_url in nodes:
+            try:
+                node_interface = NodeInterface(node_url)
+                response = await node_interface.request('get_contracts')
+                
+                if response.get('ok') and response.get('result'):
+                    network_contracts = response['result']
+                    
+                    # Check which contracts we don't have locally
+                    local_contracts = await db.get_all_contracts()
+                    
+                    for contract_addr, contract_data in network_contracts.items():
+                        if contract_addr not in local_contracts:
+                            await db.add_contract(contract_addr, contract_data)
+                            synced_contracts += 1
+                            
+            except Exception as e:
+                print(f"Failed to sync contracts from {node_url}: {e}")
+                continue
+        
+        return {'ok': True, 'synced_contracts': synced_contracts}
+    except Exception as e:
+        return {'ok': False, 'error': f'Contract synchronization failed: {str(e)}'}
+
+
+@app.get("/push_contracts")
+@app.post("/push_contracts")
+async def push_contracts(request: Request, background_tasks: BackgroundTasks, 
+                        contracts: dict = Body(default={})):
+    """Receive contracts from other nodes"""
+    try:
+        if not contracts:
+            return {'ok': False, 'error': 'No contracts provided'}
+        
+        added_contracts = 0
+        local_contracts = await db.get_all_contracts()
+        
+        for contract_addr, contract_data in contracts.items():
+            if contract_addr not in local_contracts:
+                await db.add_contract(contract_addr, contract_data)
+                added_contracts += 1
+        
+        # Propagate contracts to other nodes
+        if added_contracts > 0:
+            background_tasks.add_task(propagate, 'push_contracts', {'contracts': contracts})
+        
+        return {'ok': True, 'added_contracts': added_contracts}
+    except Exception as e:
+        return {'ok': False, 'error': f'Failed to receive contracts: {str(e)}'}
 
 
 class CustomJSONEncoder(json.JSONEncoder):
