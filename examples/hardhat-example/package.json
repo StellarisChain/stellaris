@@ -6,7 +6,9 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test --network stellaris",
-    "deploy": "hardhat run scripts/deploy.js --network stellaris"
+    "deploy": "hardhat run scripts/deploy.js --network stellaris",
+    "deploy:advanced": "hardhat run scripts/deploy-advanced.js --network stellaris",
+    "deploy:erc20": "hardhat run scripts/deploy-advanced.js --network stellaris"
   },
   "keywords": [
     "solidity",
