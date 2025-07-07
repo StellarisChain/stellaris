@@ -28,12 +28,14 @@ class Database:
         self.pending_transactions_file = None
         self.unspent_outputs_file = None
         self.pending_spent_outputs_file = None
+        self.contracts_file = None
         self._blocks = {}
         self._transactions = {}
         self._pending_transactions = {}
         self._unspent_outputs = set()
         self._pending_spent_outputs = set()
         self._transaction_block_map = {}
+        self._contracts = {}  # BPF contracts storage
         self.is_indexed = True
         self._lock = asyncio.Lock()
 
@@ -48,6 +50,7 @@ class Database:
         self.pending_transactions_file = self.data_dir / 'pending_transactions.json.gz'
         self.unspent_outputs_file = self.data_dir / 'unspent_outputs.json.gz'
         self.pending_spent_outputs_file = self.data_dir / 'pending_spent_outputs.json.gz'
+        self.contracts_file = self.data_dir / 'contracts.json.gz'
         
         await self._load_data()
         Database.instance = self
@@ -80,6 +83,7 @@ class Database:
         self._blocks = await self._load_from_file(self.blocks_file)
         self._transactions = await self._load_from_file(self.transactions_file)
         self._pending_transactions = await self._load_from_file(self.pending_transactions_file)
+        self._contracts = await self._load_from_file(self.contracts_file)
         
         unspent_data = await self._load_from_file(self.unspent_outputs_file)
         self._unspent_outputs = set(tuple(item) for item in unspent_data.get('outputs', []))
@@ -108,6 +112,35 @@ class Database:
     async def _save_pending_spent_outputs(self):
         data = {'outputs': list(self._pending_spent_outputs)}
         await self._save_to_file(self.pending_spent_outputs_file, data)
+
+    async def _save_contracts(self):
+        """Save contracts to file"""
+        await self._save_to_file(self.contracts_file, self._contracts)
+
+    async def add_contract(self, contract_address: str, contract_data: dict):
+        """Add a BPF contract to storage"""
+        self._contracts[contract_address] = contract_data
+        await self._save_contracts()
+
+    async def get_contract(self, contract_address: str) -> dict:
+        """Get a BPF contract by address"""
+        return self._contracts.get(contract_address)
+
+    async def get_all_contracts(self) -> dict:
+        """Get all BPF contracts"""
+        return self._contracts.copy()
+
+    async def update_contract_state(self, contract_address: str, new_state: dict):
+        """Update contract state"""
+        if contract_address in self._contracts:
+            self._contracts[contract_address]['state'] = new_state
+            await self._save_contracts()
+
+    async def remove_contract(self, contract_address: str):
+        """Remove a contract (for testing purposes)"""
+        if contract_address in self._contracts:
+            del self._contracts[contract_address]
+            await self._save_contracts()
 
     async def add_pending_transaction(self, transaction: Transaction, verify: bool = True):
         if isinstance(transaction, CoinbaseTransaction):

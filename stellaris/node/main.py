@@ -28,9 +28,10 @@ from stellaris.manager import create_block, get_difficulty, Manager, get_transac
     split_block_content, calculate_difficulty, clear_pending_transactions, block_to_bytes, get_transactions_merkle_tree_ordered
 from stellaris.node.nodes_manager import NodesManager, NodeInterface
 from stellaris.node.utils import ip_is_local
-from stellaris.transactions import Transaction, CoinbaseTransaction
+from stellaris.transactions import Transaction, CoinbaseTransaction, BPFContractTransaction
 from stellaris.database import Database
 from stellaris.constants import VERSION, ENDIAN
+from stellaris.bpf_vm import BPFExecutor, BPFContract
 
 
 limiter = Limiter(key_func=get_remote_address)
@@ -488,6 +489,197 @@ async def get_blocks(request: Request, offset: int, limit: int = Query(default=.
     blocks = await db.get_blocks(offset, limit)
     result = {'ok': True, 'result': blocks}
     return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+
+
+@app.post("/deploy_contract")
+@limiter.limit("5/minute")
+async def deploy_contract(request: Request, 
+                         bytecode: str = Body(...), 
+                         abi: dict = Body(...),
+                         inputs: list = Body(...),
+                         outputs: list = Body(...),
+                         gas_limit: int = Body(default=100000),
+                         private_keys: list = Body(default=[])):
+    """Deploy a new BPF contract"""
+    try:
+        # Validate inputs
+        if not bytecode or not abi:
+            return {'ok': False, 'error': 'Bytecode and ABI are required'}
+        
+        # Validate bytecode format
+        try:
+            bytecode_bytes = bytes.fromhex(bytecode)
+        except ValueError:
+            return {'ok': False, 'error': 'Invalid bytecode format'}
+        
+        # Create transaction inputs and outputs
+        from stellaris.transactions import TransactionInput, TransactionOutput
+        tx_inputs = []
+        tx_outputs = []
+        
+        for inp in inputs:
+            tx_inputs.append(TransactionInput(
+                tx_hash=inp['tx_hash'],
+                index=inp['index'],
+                private_key=inp.get('private_key')
+            ))
+        
+        for out in outputs:
+            tx_outputs.append(TransactionOutput(
+                address=out['address'],
+                amount=Decimal(str(out['amount']))
+            ))
+        
+        # Create BPF contract transaction
+        contract_data = {
+            'bytecode': bytecode,
+            'abi': abi
+        }
+        
+        contract_tx = BPFContractTransaction(
+            inputs=tx_inputs,
+            outputs=tx_outputs,
+            contract_type=BPFContractTransaction.CONTRACT_DEPLOY,
+            contract_data=contract_data,
+            gas_limit=gas_limit
+        )
+        
+        # Sign transaction
+        if private_keys:
+            contract_tx.sign(private_keys)
+        
+        # Add to pending transactions
+        if await db.add_pending_transaction(contract_tx):
+            return {'ok': True, 'tx_hash': contract_tx.hash()}
+        else:
+            return {'ok': False, 'error': 'Failed to add contract deployment transaction'}
+            
+    except Exception as e:
+        return {'ok': False, 'error': f'Contract deployment failed: {str(e)}'}
+
+
+@app.post("/call_contract")
+@limiter.limit("10/minute")
+async def call_contract(request: Request,
+                       contract_address: str = Body(...),
+                       function_name: str = Body(...),
+                       args: list = Body(default=[]),
+                       inputs: list = Body(...),
+                       outputs: list = Body(...),
+                       gas_limit: int = Body(default=100000),
+                       private_keys: list = Body(default=[])):
+    """Call a BPF contract function"""
+    try:
+        # Validate contract exists
+        contract_data = await db.get_contract(contract_address)
+        if not contract_data:
+            return {'ok': False, 'error': 'Contract not found'}
+        
+        # Create transaction inputs and outputs
+        from stellaris.transactions import TransactionInput, TransactionOutput
+        tx_inputs = []
+        tx_outputs = []
+        
+        for inp in inputs:
+            tx_inputs.append(TransactionInput(
+                tx_hash=inp['tx_hash'],
+                index=inp['index'],
+                private_key=inp.get('private_key')
+            ))
+        
+        for out in outputs:
+            tx_outputs.append(TransactionOutput(
+                address=out['address'],
+                amount=Decimal(str(out['amount']))
+            ))
+        
+        # Create BPF contract call transaction
+        contract_call_data = {
+            'contract_address': contract_address,
+            'function_name': function_name,
+            'args': args
+        }
+        
+        contract_tx = BPFContractTransaction(
+            inputs=tx_inputs,
+            outputs=tx_outputs,
+            contract_type=BPFContractTransaction.CONTRACT_CALL,
+            contract_data=contract_call_data,
+            gas_limit=gas_limit
+        )
+        
+        # Sign transaction
+        if private_keys:
+            contract_tx.sign(private_keys)
+        
+        # Add to pending transactions
+        if await db.add_pending_transaction(contract_tx):
+            return {'ok': True, 'tx_hash': contract_tx.hash()}
+        else:
+            return {'ok': False, 'error': 'Failed to add contract call transaction'}
+            
+    except Exception as e:
+        return {'ok': False, 'error': f'Contract call failed: {str(e)}'}
+
+
+@app.get("/get_contract")
+@limiter.limit("20/minute")
+async def get_contract(request: Request, address: str, pretty: bool = False):
+    """Get contract information"""
+    try:
+        contract_data = await db.get_contract(address)
+        if contract_data:
+            result = {'ok': True, 'contract': contract_data}
+        else:
+            result = {'ok': False, 'error': 'Contract not found'}
+        
+        return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+    except Exception as e:
+        return {'ok': False, 'error': f'Failed to get contract: {str(e)}'}
+
+
+@app.get("/get_contracts")
+@limiter.limit("10/minute")
+async def get_contracts(request: Request, pretty: bool = False):
+    """Get all contracts"""
+    try:
+        contracts = await db.get_all_contracts()
+        result = {'ok': True, 'contracts': contracts}
+        return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+    except Exception as e:
+        return {'ok': False, 'error': f'Failed to get contracts: {str(e)}'}
+
+
+@app.post("/estimate_gas")
+@limiter.limit("20/minute")
+async def estimate_gas(request: Request,
+                      contract_address: str = Body(...),
+                      function_name: str = Body(...),
+                      args: list = Body(default=[]),
+                      caller: str = Body(...)):
+    """Estimate gas needed for contract execution"""
+    try:
+        # Load contracts from database
+        contracts = await db.get_all_contracts()
+        contracts_dict = {}
+        for addr, contract_data in contracts.items():
+            contracts_dict[addr] = BPFContract.from_dict(contract_data)
+        
+        # Create executor
+        executor = BPFExecutor(contracts_dict)
+        
+        # Estimate gas
+        gas_estimate = executor.estimate_gas(
+            contract_address=contract_address,
+            function_name=function_name,
+            args=args,
+            caller=caller
+        )
+        
+        return {'ok': True, 'gas_estimate': gas_estimate}
+    except Exception as e:
+        return {'ok': False, 'error': f'Gas estimation failed: {str(e)}'}
+
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):
