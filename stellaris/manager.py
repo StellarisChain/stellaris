@@ -7,8 +7,9 @@ from typing import Tuple, List, Union
 from stellaris.database import Database, OLD_BLOCKS_TRANSACTIONS_ORDER
 from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX
 from stellaris.utils.general import sha256, timestamp, bytes_to_string, string_to_bytes
-from stellaris.transactions import CoinbaseTransaction, Transaction
+from stellaris.transactions import CoinbaseTransaction, Transaction, BPFContractTransaction
 from stellaris.utils.block_utils import calculate_difficulty, difficulty_to_hashrate, difficulty_to_hashrate_old, hashrate_to_difficulty, hashrate_to_difficulty_old, hashrate_to_difficulty_wrong, BLOCK_TIME, BLOCKS_COUNT, START_DIFFICULTY
+from stellaris.bpf_vm import BPFExecutor, BPFContract
 
 async def get_difficulty() -> Tuple[Decimal, dict]:
     if Manager.difficulty is None:
@@ -207,6 +208,16 @@ async def check_block(block_content: str, transactions: List[Transaction], minin
             print(f'transaction {transaction.hash()} has been not verified')
             return False
 
+    # Process BPF contract transactions
+    bpf_executor = BPFExecutor()
+    for transaction in transactions:
+        if isinstance(transaction, BPFContractTransaction):
+            try:
+                await process_bpf_contract_transaction(transaction, bpf_executor)
+            except Exception as e:
+                print(f'BPF contract transaction {transaction.hash()} failed: {e}')
+                return False
+
     transactions_merkle_tree = get_transactions_merkle_tree(
         transactions) if block_no >= 22500 else get_transactions_merkle_tree_ordered(transactions)
     if merkle_tree != transactions_merkle_tree:
@@ -268,6 +279,96 @@ async def create_block(block_content: str, transactions: List[Transaction], last
         print(f'Added {len(transactions)} transactions in block {block_no}. Reward: {block_reward}, Fees: {fees}')
     Manager.difficulty = None
     return True
+
+
+async def process_bpf_contract_transaction(transaction: BPFContractTransaction, bpf_executor: BPFExecutor):
+    """Process a BPF contract transaction"""
+    database = Database.instance
+    
+    if transaction.is_contract_deployment():
+        # Deploy new contract
+        bytecode = transaction.get_contract_bytecode()
+        abi = transaction.get_contract_abi()
+        
+        if not bytecode or not abi:
+            raise ValueError("Invalid contract deployment data")
+        
+        # Get creator address from transaction inputs
+        creator = await get_transaction_creator(transaction)
+        
+        # Deploy contract
+        contract = bpf_executor.deploy_contract(
+            bytecode=bytecode,
+            abi=abi,
+            creator=creator,
+            gas_limit=transaction.gas_limit
+        )
+        
+        # Store contract in database
+        await database.add_contract(contract.address, contract.to_dict())
+        
+        # Update transaction with execution result
+        transaction.execution_result = {
+            'contract_address': contract.address,
+            'gas_used': 0,  # Deployment gas is minimal
+            'status': 'success'
+        }
+        
+    elif transaction.is_contract_call():
+        # Execute contract call
+        contract_address = transaction.get_contract_address()
+        function_name = transaction.get_function_name()
+        args = transaction.get_function_args()
+        
+        # Get contract from database
+        contract_data = await database.get_contract(contract_address)
+        if not contract_data:
+            raise ValueError(f"Contract not found: {contract_address}")
+        
+        # Load contract
+        contract = BPFContract.from_dict(contract_data)
+        bpf_executor.contracts[contract_address] = contract
+        
+        # Get caller address
+        caller = await get_transaction_creator(transaction)
+        
+        # Execute contract call
+        result, gas_used = bpf_executor.call_contract(
+            contract_address=contract_address,
+            function_name=function_name,
+            args=args,
+            caller=caller,
+            gas_limit=transaction.gas_limit
+        )
+        
+        # Update contract state in database
+        await database.update_contract_state(contract_address, contract.state)
+        
+        # Update transaction with execution result
+        transaction.execution_result = {
+            'result': result,
+            'gas_used': gas_used,
+            'status': 'success'
+        }
+        transaction.gas_used = gas_used
+        
+    else:
+        raise ValueError(f"Unknown BPF contract transaction type: {transaction.contract_type}")
+
+
+async def get_transaction_creator(transaction: Transaction) -> str:
+    """Get the creator address from a transaction"""
+    if not transaction.inputs:
+        raise ValueError("Transaction has no inputs")
+    
+    # Get the first input's public key as the creator
+    first_input = transaction.inputs[0]
+    if hasattr(first_input, 'public_key') and first_input.public_key:
+        from stellaris.utils.general import point_to_string
+        return point_to_string(first_input.public_key)
+    
+    # Fallback: use a default creator address
+    return "0000000000000000000000000000000000000000000000000000000000000000"
 
 
 class Manager:

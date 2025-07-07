@@ -1,0 +1,30 @@
+{
+  "name": "stellaris-solidity-example",
+  "version": "1.0.0",
+  "description": "Example Solidity project for Stellaris blockchain",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test --network stellaris",
+    "deploy": "hardhat run scripts/deploy.js --network stellaris",
+    "deploy:advanced": "hardhat run scripts/deploy-advanced.js --network stellaris",
+    "deploy:erc20": "hardhat run scripts/deploy-advanced.js --network stellaris"
+  },
+  "keywords": [
+    "solidity",
+    "hardhat",
+    "stellaris",
+    "blockchain",
+    "smart-contracts"
+  ],
+  "author": "Stellaris Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomiclabs/hardhat-waffle": "^2.0.6",
+    "chai": "^4.3.10",
+    "ethereum-waffle": "^4.0.10",
+    "ethers": "^5.7.2",
+    "hardhat": "^2.19.4"
+  }
+}
