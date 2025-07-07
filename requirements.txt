@@ -33,3 +33,4 @@ pip <= 23.3.1
 bcc>=0.18.0
 py-solc-x>=2.0.0
 cbor2>=5.4.0
+pycryptodome>=3.18.0

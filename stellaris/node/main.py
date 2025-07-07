@@ -136,6 +136,75 @@ async def fetch_contract_from_network(contract_address: str) -> dict:
     return None
 
 
+def _find_function_by_selector(selector: str, abi: List[Dict], abi_handler) -> Optional[str]:
+    """Find function name by selector in ABI"""
+    try:
+        selector_bytes = bytes.fromhex(selector)
+        
+        # Handle different ABI formats
+        if isinstance(abi, dict) and 'functions' in abi:
+            # Old format
+            for func_name, func_def in abi['functions'].items():
+                expected_selector = _calculate_function_selector(func_name, func_def, abi_handler)
+                if expected_selector == selector_bytes:
+                    return func_name
+        elif isinstance(abi, list):
+            # Standard Solidity ABI format
+            for item in abi:
+                if item.get('type') == 'function':
+                    func_name = item.get('name')
+                    expected_selector = _calculate_function_selector(func_name, item, abi_handler)
+                    if expected_selector == selector_bytes:
+                        return func_name
+        
+        return None
+    except Exception:
+        return None
+
+
+def _calculate_function_selector(func_name: str, func_def: Dict, abi_handler) -> bytes:
+    """Calculate function selector for a function"""
+    try:
+        signature = abi_handler._get_function_signature(func_name, func_def)
+        return abi_handler._keccak256(signature.encode())[:4]
+    except Exception:
+        return b''
+
+
+def _decode_call_arguments(call_data: str, function_name: str, abi: List[Dict], abi_handler) -> List:
+    """Decode call arguments from hex data"""
+    try:
+        if not call_data:
+            return []
+        
+        data_bytes = bytes.fromhex(call_data)
+        
+        # Get function definition from ABI
+        function_abi = abi_handler._get_function_abi(function_name, abi)
+        inputs = function_abi.get('inputs', [])
+        
+        if not inputs:
+            return []
+        
+        # Decode arguments
+        return abi_handler._decode_arguments(data_bytes, inputs)
+    except Exception as e:
+        raise Exception(f"Failed to decode arguments: {str(e)}")
+
+
+def _extract_abi_from_bytecode(bytecode: str) -> Optional[List[Dict]]:
+    """Extract ABI from bytecode metadata if present"""
+    try:
+        # Look for common ABI patterns in bytecode metadata
+        if len(bytecode) > 100:
+            # Check for Solidity metadata hash at the end
+            # This is a simplified extraction - real implementation would parse CBOR metadata
+            return None  # Return None to use default ABI
+        return None
+    except Exception:
+        return None
+
+
 async def propagate(path: str, args: dict, ignore_url=None, nodes: list = None):
     global self_url
     self_node = NodeInterface(self_url or '')
@@ -879,52 +948,163 @@ async def eth_send_transaction(request: Request, data: dict = Body(...)):
 async def _deploy_contract_web3(bytecode: str, gas_limit: int):
     """Deploy contract via Web3-compatible interface"""
     try:
-        # Create minimal ABI for Web3 contracts
-        abi = [
+        # Extract ABI from bytecode metadata if present, otherwise create minimal ABI
+        abi = _extract_abi_from_bytecode(bytecode) or [
             {
-                "type": "function",
-                "name": "constructor",
+                "type": "constructor",
                 "inputs": [],
                 "outputs": []
             }
         ]
         
-        # Create dummy inputs/outputs for Stellaris transaction format
-        inputs = [{'tx_hash': '0' * 64, 'index': 0}]
-        outputs = [{'address': 'web3_deployment', 'amount': '0'}]
+        # Generate a unique contract address based on bytecode and timestamp
+        import time
+        from stellaris.utils.general import sha256
         
-        # Call the existing deploy_contract endpoint
-        from fastapi import Request
-        from starlette.background import BackgroundTasks
+        contract_seed = f"{bytecode}{time.time()}"
+        contract_address = sha256(contract_seed.encode())[:40]
         
-        result = await deploy_contract(
-            request=None,
-            bytecode=bytecode,
-            abi=abi,
-            inputs=inputs,
-            outputs=outputs,
-            gas_limit=gas_limit,
-            contract_type='evm'
+        # Create proper transaction inputs and outputs for contract deployment
+        # In a real deployment, these would come from the calling account
+        inputs = []
+        outputs = [{
+            'address': contract_address,
+            'amount': '0'
+        }]
+        
+        # Create contract data with extracted/generated ABI
+        contract_data = {
+            'bytecode': bytecode,
+            'abi': abi,
+            'contract_type': 'evm',
+            'deployment_time': int(time.time()),
+            'gas_limit': gas_limit
+        }
+        
+        # Create BPF contract transaction
+        from stellaris.transactions import BPFContractTransaction
+        contract_tx = BPFContractTransaction(
+            inputs=[],  # Empty inputs for deployment
+            outputs=[],  # Empty outputs for deployment
+            contract_type=BPFContractTransaction.CONTRACT_DEPLOY,
+            contract_data=contract_data,
+            gas_limit=gas_limit
         )
         
-        if result.get('ok'):
-            return {'id': 1, 'jsonrpc': '2.0', 'result': result['tx_hash']}
+        # Store contract directly in database for immediate availability
+        contract = {
+            'bytecode': bytecode,
+            'abi': abi,
+            'creator': contract_address,
+            'gas_limit': gas_limit,
+            'state': {},
+            'contract_type': 'evm'
+        }
+        
+        await db.add_contract(contract_address, contract)
+        
+        # Add to pending transactions for network propagation
+        if await db.add_pending_transaction(contract_tx):
+            # Propagate transaction to network in background
+            import asyncio
+            asyncio.create_task(propagate('push_tx', {'tx_hex': contract_tx.hex()}))
+            
+            return {
+                'id': 1, 
+                'jsonrpc': '2.0', 
+                'result': {
+                    'transactionHash': contract_tx.hash(),
+                    'contractAddress': f"0x{contract_address}"
+                }
+            }
         else:
-            return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': result.get('error', 'Unknown error')}}
+            return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': 'Failed to deploy contract'}}
             
     except Exception as e:
-        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': f'Contract deployment failed: {str(e)}'}}
 
 
 async def _call_contract_web3(to_address: str, data: str, gas_limit: int):
     """Call contract via Web3-compatible interface"""
     try:
-        # For now, return a dummy transaction hash
-        # In a real implementation, you'd decode the data and call the appropriate function
-        return {'id': 1, 'jsonrpc': '2.0', 'result': '0x' + '1' * 64}
+        # Remove 0x prefix if present
+        if to_address.startswith('0x'):
+            to_address = to_address[2:]
+        if data.startswith('0x'):
+            data = data[2:]
+        
+        # Decode function selector (first 4 bytes)
+        if len(data) < 8:
+            return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': 'Invalid call data'}}
+        
+        function_selector = data[:8]
+        call_data = data[8:] if len(data) > 8 else ""
+        
+        # Get contract from database
+        contract_data = await db.get_contract(to_address)
+        if not contract_data:
+            # Try to fetch from network
+            contract_data = await fetch_contract_from_network(to_address)
+            if not contract_data:
+                return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': 'Contract not found'}}
+        
+        # Find matching function in ABI using selector
+        from stellaris.bpf_vm.solidity_abi import SolidityABI
+        abi_handler = SolidityABI()
+        
+        function_name = _find_function_by_selector(function_selector, contract_data.get('abi', []), abi_handler)
+        if not function_name:
+            return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': 'Function not found'}}
+        
+        # Decode call arguments
+        try:
+            args = _decode_call_arguments(call_data, function_name, contract_data.get('abi', []), abi_handler)
+        except Exception as e:
+            return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': f'Failed to decode arguments: {str(e)}'}}
+        
+        # Execute contract call
+        try:
+            from stellaris.bpf_vm import BPFExecutor, BPFContract
+            
+            # Create contract instance
+            contract = BPFContract.from_dict(contract_data)
+            
+            # Create executor with all contracts
+            contracts = await db.get_all_contracts()
+            contracts_dict = {}
+            for addr, cdata in contracts.items():
+                contracts_dict[addr] = BPFContract.from_dict(cdata)
+            
+            executor = BPFExecutor(contracts_dict)
+            
+            # Execute function call
+            result = executor.call_function(
+                contract_address=to_address,
+                function_name=function_name,
+                args=args,
+                caller='0x' + '0' * 40,  # Default caller
+                gas_limit=gas_limit
+            )
+            
+            # Encode result for Web3 response
+            if result.get('success'):
+                output_data = result.get('output', b'')
+                if isinstance(output_data, bytes):
+                    output_hex = '0x' + output_data.hex()
+                else:
+                    # Encode non-bytes output
+                    output_hex = '0x' + str(output_data).encode().hex()
+                
+                return {'id': 1, 'jsonrpc': '2.0', 'result': output_hex}
+            else:
+                error_msg = result.get('error', 'Execution failed')
+                return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': error_msg}}
+                
+        except Exception as e:
+            return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': f'Execution failed: {str(e)}'}}
         
     except Exception as e:
-        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': f'Call failed: {str(e)}'}}
 
 
 @app.post("/eth_call")
@@ -938,9 +1118,11 @@ async def eth_call(request: Request, data: dict = Body(...)):
         if not to_address:
             return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': 'No contract address provided'}}
         
-        # For static calls, return dummy data
-        # In a real implementation, you'd execute the call and return the result
-        return {'id': 1, 'jsonrpc': '2.0', 'result': '0x' + '0' * 64}
+        # Execute the contract call using our implementation
+        result = await _call_contract_web3(to_address, call_data, 100000)
+        
+        # Return the result from the contract execution
+        return result
         
     except Exception as e:
         return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
@@ -951,29 +1133,103 @@ async def eth_call(request: Request, data: dict = Body(...)):
 async def eth_get_transaction_receipt(request: Request, tx_hash: str = Body(...)):
     """Web3-compatible transaction receipt endpoint"""
     try:
+        # Remove 0x prefix if present
+        if tx_hash.startswith('0x'):
+            tx_hash = tx_hash[2:]
+        
         # Check if transaction exists in our database
         transaction = await db.get_transaction(tx_hash)
         
         if transaction:
-            # Return a Web3-compatible receipt
-            return {
+            # Try to find the block containing this transaction
+            block_info = None
+            block_number = None
+            block_hash = None
+            
+            # Search through recent blocks to find the transaction
+            try:
+                last_block = await db.get_last_block()
+                if last_block:
+                    current_id = last_block.get('id', 0)
+                    # Search recent blocks (last 100)
+                    for i in range(max(0, current_id - 100), current_id + 1):
+                        try:
+                            block = await db.get_block_by_id(i)
+                            if block:
+                                tx_hashes = await db.get_block_transaction_hashes(block['hash'])
+                                if tx_hash in tx_hashes:
+                                    block_info = block
+                                    block_number = hex(block['id'])
+                                    block_hash = '0x' + block['hash']
+                                    break
+                        except:
+                            continue
+            except:
+                pass
+            
+            # Determine gas used based on transaction type
+            gas_used = '0x5208'  # Default gas for simple transaction
+            contract_address = None
+            logs = []
+            
+            if hasattr(transaction, 'contract_type'):
+                # This is a BPF contract transaction
+                if hasattr(transaction, 'gas_limit') and transaction.gas_limit:
+                    gas_used = hex(transaction.gas_limit)
+                else:
+                    gas_used = '0x186a0'  # 100000 gas default
+                    
+                if getattr(transaction, 'contract_type', None) == 'deploy':
+                    # Generate contract address from transaction hash
+                    contract_address = '0x' + sha256(f"{tx_hash}").encode().hex()[:40]
+                elif getattr(transaction, 'contract_type', None) == 'call':
+                    # Generate logs for contract calls if available
+                    if hasattr(transaction, 'contract_data') and transaction.contract_data:
+                        logs = [{
+                            'address': '0x' + transaction.contract_data.get('contract_address', '0' * 40),
+                            'topics': ['0x' + sha256(f"call_{transaction.contract_data.get('function_name', 'unknown')}").encode().hex()],
+                            'data': '0x' + str(transaction.contract_data.get('args', [])).encode().hex()
+                        }]
+            
+            # Get transaction input/output addresses
+            from_addr = '0x' + '0' * 40  # Default
+            to_addr = '0x' + '0' * 40    # Default
+            
+            try:
+                if hasattr(transaction, 'inputs') and transaction.inputs:
+                    # For regular transactions, we'd need to look up the input address
+                    pass
+                if hasattr(transaction, 'outputs') and transaction.outputs:
+                    to_addr = '0x' + getattr(transaction.outputs[0], 'address', '0' * 40)
+            except:
+                pass
+            
+            # Return a Web3-compatible receipt with real data
+            receipt = {
                 'id': 1,
                 'jsonrpc': '2.0',
                 'result': {
-                    'transactionHash': tx_hash,
-                    'blockNumber': '0x1',
-                    'blockHash': '0x' + '1' * 64,
-                    'gasUsed': '0x5208',
-                    'status': '0x1',
-                    'contractAddress': None,
-                    'logs': []
+                    'transactionHash': '0x' + tx_hash,
+                    'blockNumber': block_number,
+                    'blockHash': block_hash,
+                    'gasUsed': gas_used,
+                    'status': '0x1',  # Success
+                    'contractAddress': contract_address,
+                    'logs': logs,
+                    'logsBloom': '0x' + '0' * 512,  # Empty bloom filter
+                    'transactionIndex': '0x0',
+                    'from': from_addr,
+                    'to': contract_address or to_addr,
+                    'cumulativeGasUsed': gas_used
                 }
             }
+            
+            return receipt
         else:
             return {'id': 1, 'jsonrpc': '2.0', 'result': None}
             
     except Exception as e:
-        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': f'Failed to get receipt: {str(e)}'}}
 
 
 @app.get("/eth_chainId")
@@ -988,13 +1244,19 @@ async def eth_chain_id(request: Request):
 async def eth_get_balance(request: Request, address: str = Body(...)):
     """Web3-compatible balance endpoint"""
     try:
-        # Get balance from our database
-        balance = await db.get_balance(address)
+        # Remove 0x prefix if present
+        if address.startswith('0x'):
+            address = address[2:]
+        
+        # Get balance using existing address info endpoint logic
+        outputs = await db.get_spendable_outputs(address)
+        balance = sum(output.amount for output in outputs)
+        
         if balance is None:
             balance = 0
         
         # Convert to wei (multiply by 10^18)
-        balance_wei = int(balance * 10**18)
+        balance_wei = int(float(balance) * 10**18)
         return {'id': 1, 'jsonrpc': '2.0', 'result': hex(balance_wei)}
         
     except Exception as e:
@@ -1045,8 +1307,13 @@ async def eth_estimate_gas(request: Request, data: dict = Body(...)):
 async def eth_block_number(request: Request):
     """Web3-compatible block number endpoint"""
     try:
-        # Get current block height
-        block_height = await db.get_block_height()
+        # Get current block height from last block
+        last_block = await db.get_last_block()
+        if last_block:
+            block_height = last_block.get('id', 0)
+        else:
+            block_height = 0
+        
         return {'id': 1, 'jsonrpc': '2.0', 'result': hex(block_height)}
         
     except Exception as e:

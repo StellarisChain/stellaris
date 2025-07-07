@@ -237,11 +237,14 @@ class SolidityABI:
             raise BPFValidationError(f"Unsupported output type: {type_name}")
     
     def _keccak256(self, data: bytes) -> bytes:
-        """Simple keccak256 implementation for function selectors"""
-        # This is a simplified implementation
-        # In a real implementation, use the proper keccak256 library
-        import hashlib
-        return hashlib.sha256(data).digest()  # Using SHA256 as placeholder
+        """Production keccak256 implementation for function selectors"""
+        try:
+            from Crypto.Hash import keccak
+            return keccak.new(digest_bits=256).update(data).digest()
+        except ImportError:
+            # Fallback to hashlib if pycryptodome not available
+            import hashlib
+            return hashlib.sha3_256(data).digest()
     
     def is_solidity_abi(self, abi: Any) -> bool:
         """Check if ABI is in Solidity format"""

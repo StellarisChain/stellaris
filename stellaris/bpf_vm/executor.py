@@ -217,34 +217,98 @@ class BPFExecutor:
     
     def _execute_contract_function(self, contract: BPFContract, context: Dict[str, Any]) -> Any:
         """Execute a contract function with context"""
-        # For now, implement a simple execution model
-        # In a full implementation, this would compile the function call
-        # into BPF bytecode and execute it
+        try:
+            # Handle EVM contracts with Solidity ABI
+            if contract.contract_type == 'evm':
+                return self._execute_evm_contract(contract, context)
+            else:
+                # Execute BPF contract
+                return self._execute_bpf_contract(contract, context)
+        except Exception as e:
+            raise BPFExecutionError(f"Contract execution failed: {str(e)}")
+    
+    def _execute_evm_contract(self, contract: BPFContract, context: Dict[str, Any]) -> Any:
+        """Execute EVM contract using compatibility layer"""
+        # Encode function call using Solidity ABI
+        function_name = context['function_name']
+        args = context['args']
         
-        # Prepare input data (simplified)
-        input_data = self._prepare_input_data(context)
+        # Use EVM compatibility layer to execute Solidity bytecode
+        from .evm_compat import EVMCompatibilityLayer
+        evm_layer = EVMCompatibilityLayer(self.vm)
         
-        # Execute the contract bytecode
-        result = self.vm.execute(contract.bytecode, input_data)
+        # Execute the EVM bytecode within BPF VM
+        result = evm_layer.execute_function(
+            bytecode=contract.bytecode,
+            function_name=function_name,
+            args=args,
+            contract_state=contract.state,
+            caller=context['caller'],
+            gas_limit=context.get('gas_limit', contract.gas_limit)
+        )
+        
+        # Update contract state
+        contract.state.update(result.get('state_changes', {}))
         
         return result
     
+    def _execute_bpf_contract(self, contract: BPFContract, context: Dict[str, Any]) -> Any:
+        """Execute native BPF contract"""
+        # Prepare input data for BPF execution
+        input_data = self._prepare_input_data(context)
+        
+        # Execute the contract bytecode with security checks
+        result = self.vm.execute(contract.bytecode, input_data)
+        
+        # Parse and return the result
+        return self._parse_execution_result(result, contract, context)
+    
+    def _parse_execution_result(self, raw_result: Any, contract: BPFContract, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse raw BPF execution result into structured format"""
+        try:
+            if isinstance(raw_result, dict):
+                return raw_result
+            elif isinstance(raw_result, bytes):
+                # Try to decode as JSON
+                import json
+                try:
+                    return json.loads(raw_result.decode('utf-8'))
+                except:
+                    return {'output': raw_result, 'success': True}
+            else:
+                return {'output': raw_result, 'success': True}
+        except Exception as e:
+            return {'output': None, 'success': False, 'error': str(e)}
+    
     def _prepare_input_data(self, context: Dict[str, Any]) -> bytes:
         """Prepare input data for BPF execution"""
-        # Simple serialization of context
-        # In a full implementation, this would use a proper ABI encoder
         import json
+        import struct
         
-        # Create a simplified input structure
+        # Create comprehensive input structure for BPF execution
         input_struct = {
             'caller': context['caller'],
             'function': context['function_name'],
-            'args': context['args']
+            'args': context['args'],
+            'gas_limit': context.get('gas_limit', 100000),
+            'timestamp': context.get('timestamp', int(time.time())),
+            'block_number': context.get('block_number', 0)
         }
         
-        # Convert to bytes (simplified)
-        input_json = json.dumps(input_struct)
-        return input_json.encode('utf-8')
+        # Convert to optimized binary format for BPF
+        try:
+            # First, try to create a compact binary representation
+            input_json = json.dumps(input_struct, separators=(',', ':'))
+            json_bytes = input_json.encode('utf-8')
+            
+            # Add length prefix for BPF parsing
+            length_prefix = struct.pack('<I', len(json_bytes))
+            return length_prefix + json_bytes
+            
+        except Exception:
+            # Fallback to simple encoding
+            fallback_data = f"{context['function_name']}:{','.join(map(str, context['args']))}"
+            return fallback_data.encode('utf-8')
     
     def get_contract(self, address: str) -> Optional[BPFContract]:
         """Get contract by address"""
@@ -264,7 +328,7 @@ class BPFExecutor:
     def estimate_gas(self, contract_address: str, function_name: str, 
                      args: List[Any], caller: str) -> int:
         """
-        Estimate gas needed for contract execution
+        Estimate gas needed for contract execution using dry run
         
         Args:
             contract_address: Address of the contract
@@ -275,25 +339,88 @@ class BPFExecutor:
         Returns:
             Estimated gas needed
         """
-        # Simple gas estimation
-        # In a full implementation, this would do a dry run
-        
         if contract_address not in self.contracts:
             raise BPFExecutionError(f"Contract not found: {contract_address}")
         
         contract = self.contracts[contract_address]
         
+        try:
+            # Perform a dry run to get accurate gas estimation
+            original_state = contract.state.copy()
+            
+            # Create estimation context with maximum gas
+            estimation_context = {
+                'function_name': function_name,
+                'args': args,
+                'caller': caller,
+                'gas_limit': 1000000,  # High limit for estimation
+                'dry_run': True
+            }
+            
+            # Execute with gas tracking
+            start_gas = 1000000
+            result = self._execute_contract_function(contract, estimation_context)
+            
+            # Restore original state after dry run
+            contract.state = original_state
+            
+            # Calculate gas used
+            gas_used = start_gas - result.get('gas_remaining', start_gas)
+            
+            # Add safety margin (20%)
+            estimated_gas = int(gas_used * 1.2)
+            
+            # Ensure minimum gas levels
+            minimum_gas = self._calculate_minimum_gas(contract, function_name, args)
+            
+            return max(estimated_gas, minimum_gas)
+            
+        except Exception as e:
+            # Fallback to static estimation if dry run fails
+            return self._static_gas_estimation(contract, function_name, args)
+    
+    def _calculate_minimum_gas(self, contract: BPFContract, function_name: str, args: List[Any]) -> int:
+        """Calculate minimum gas required for function execution"""
+        # Base transaction cost
+        base_gas = 21000
+        
+        # Function call overhead
+        call_gas = 3000
+        
+        # Argument processing cost
+        arg_gas = len(args) * 1000
+        
+        # Contract type specific costs
+        if contract.contract_type == 'evm':
+            # EVM contracts require more gas for compatibility layer
+            evm_overhead = 10000
+            return base_gas + call_gas + arg_gas + evm_overhead
+        else:
+            # Native BPF contracts are more efficient
+            return base_gas + call_gas + arg_gas
+    
+    def _static_gas_estimation(self, contract: BPFContract, function_name: str, args: List[Any]) -> int:
+        """Fallback static gas estimation when dry run fails"""
         # Base gas cost
         base_gas = 21000
         
-        # Add gas for function complexity
-        func_sig = contract.get_function_signature(function_name)
-        complexity_gas = len(func_sig.get('inputs', [])) * 1000
+        # Function complexity estimation
+        try:
+            func_sig = contract.get_function_signature(function_name)
+            complexity_gas = len(func_sig.get('inputs', [])) * 2000
+        except:
+            complexity_gas = 10000  # Default for unknown functions
         
-        # Add gas for state access
-        state_gas = len(contract.state) * 100
+        # State access estimation
+        state_gas = len(contract.state) * 200
         
-        return base_gas + complexity_gas + state_gas
+        # Bytecode size factor
+        bytecode_gas = len(contract.bytecode) // 100
+        
+        total_gas = base_gas + complexity_gas + state_gas + bytecode_gas
+        
+        # Ensure reasonable bounds
+        return min(max(total_gas, 25000), 500000)
     
     def reset(self):
         """Reset executor state"""
