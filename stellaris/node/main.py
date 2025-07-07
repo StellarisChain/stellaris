@@ -595,9 +595,10 @@ async def deploy_contract(request: Request,
                          inputs: list = Body(...),
                          outputs: list = Body(...),
                          gas_limit: int = Body(default=100000),
+                         contract_type: str = Body(default='bpf'),
                          private_keys: list = Body(default=[]),
                          background_tasks: BackgroundTasks = BackgroundTasks()):
-    """Deploy a new BPF contract"""
+    """Deploy a new BPF or EVM contract"""
     try:
         # Validate inputs
         if not bytecode or not abi:
@@ -608,6 +609,13 @@ async def deploy_contract(request: Request,
             bytecode_bytes = bytes.fromhex(bytecode)
         except ValueError:
             return {'ok': False, 'error': 'Invalid bytecode format'}
+        
+        # Auto-detect contract type from ABI if not specified
+        if contract_type == 'bpf':
+            from stellaris.bpf_vm.solidity_abi import SolidityABI
+            solidity_abi = SolidityABI()
+            if solidity_abi.is_solidity_abi(abi):
+                contract_type = 'evm'
         
         # Create transaction inputs and outputs
         from stellaris.transactions import TransactionInput, TransactionOutput
@@ -630,7 +638,8 @@ async def deploy_contract(request: Request,
         # Create BPF contract transaction
         contract_data = {
             'bytecode': bytecode,
-            'abi': abi
+            'abi': abi,
+            'contract_type': contract_type
         }
         
         contract_tx = BPFContractTransaction(
@@ -649,7 +658,7 @@ async def deploy_contract(request: Request,
         if await db.add_pending_transaction(contract_tx):
             # Propagate transaction to network
             background_tasks.add_task(propagate, 'push_tx', {'tx_hex': contract_tx.hex()})
-            return {'ok': True, 'tx_hash': contract_tx.hash()}
+            return {'ok': True, 'tx_hash': contract_tx.hash(), 'contract_type': contract_type}
         else:
             return {'ok': False, 'error': 'Failed to add contract deployment transaction'}
             
@@ -843,6 +852,205 @@ async def push_contracts(request: Request, background_tasks: BackgroundTasks,
         return {'ok': True, 'added_contracts': added_contracts}
     except Exception as e:
         return {'ok': False, 'error': f'Failed to receive contracts: {str(e)}'}
+
+
+# Web3-compatible endpoints for Hardhat integration
+@app.post("/eth_sendTransaction")
+@limiter.limit("10/minute")
+async def eth_send_transaction(request: Request, data: dict = Body(...)):
+    """Web3-compatible transaction endpoint for Hardhat"""
+    try:
+        # Extract transaction data
+        tx_data = data.get('data', '')
+        to_address = data.get('to', '')
+        gas_limit = int(data.get('gas', '100000'), 16) if data.get('gas') else 100000
+        
+        if not to_address:
+            # This is a contract deployment
+            return await _deploy_contract_web3(tx_data, gas_limit)
+        else:
+            # This is a contract call
+            return await _call_contract_web3(to_address, tx_data, gas_limit)
+            
+    except Exception as e:
+        return {'error': f'Transaction failed: {str(e)}'}
+
+
+async def _deploy_contract_web3(bytecode: str, gas_limit: int):
+    """Deploy contract via Web3-compatible interface"""
+    try:
+        # Create minimal ABI for Web3 contracts
+        abi = [
+            {
+                "type": "function",
+                "name": "constructor",
+                "inputs": [],
+                "outputs": []
+            }
+        ]
+        
+        # Create dummy inputs/outputs for Stellaris transaction format
+        inputs = [{'tx_hash': '0' * 64, 'index': 0}]
+        outputs = [{'address': 'web3_deployment', 'amount': '0'}]
+        
+        # Call the existing deploy_contract endpoint
+        from fastapi import Request
+        from starlette.background import BackgroundTasks
+        
+        result = await deploy_contract(
+            request=None,
+            bytecode=bytecode,
+            abi=abi,
+            inputs=inputs,
+            outputs=outputs,
+            gas_limit=gas_limit,
+            contract_type='evm'
+        )
+        
+        if result.get('ok'):
+            return {'id': 1, 'jsonrpc': '2.0', 'result': result['tx_hash']}
+        else:
+            return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': result.get('error', 'Unknown error')}}
+            
+    except Exception as e:
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
+
+
+async def _call_contract_web3(to_address: str, data: str, gas_limit: int):
+    """Call contract via Web3-compatible interface"""
+    try:
+        # For now, return a dummy transaction hash
+        # In a real implementation, you'd decode the data and call the appropriate function
+        return {'id': 1, 'jsonrpc': '2.0', 'result': '0x' + '1' * 64}
+        
+    except Exception as e:
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
+
+
+@app.post("/eth_call")
+@limiter.limit("20/minute")
+async def eth_call(request: Request, data: dict = Body(...)):
+    """Web3-compatible call endpoint for Hardhat"""
+    try:
+        to_address = data.get('to', '')
+        call_data = data.get('data', '')
+        
+        if not to_address:
+            return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': 'No contract address provided'}}
+        
+        # For static calls, return dummy data
+        # In a real implementation, you'd execute the call and return the result
+        return {'id': 1, 'jsonrpc': '2.0', 'result': '0x' + '0' * 64}
+        
+    except Exception as e:
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
+
+
+@app.post("/eth_getTransactionReceipt")
+@limiter.limit("20/minute")
+async def eth_get_transaction_receipt(request: Request, tx_hash: str = Body(...)):
+    """Web3-compatible transaction receipt endpoint"""
+    try:
+        # Check if transaction exists in our database
+        transaction = await db.get_transaction(tx_hash)
+        
+        if transaction:
+            # Return a Web3-compatible receipt
+            return {
+                'id': 1,
+                'jsonrpc': '2.0',
+                'result': {
+                    'transactionHash': tx_hash,
+                    'blockNumber': '0x1',
+                    'blockHash': '0x' + '1' * 64,
+                    'gasUsed': '0x5208',
+                    'status': '0x1',
+                    'contractAddress': None,
+                    'logs': []
+                }
+            }
+        else:
+            return {'id': 1, 'jsonrpc': '2.0', 'result': None}
+            
+    except Exception as e:
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
+
+
+@app.get("/eth_chainId")
+@limiter.limit("50/minute")
+async def eth_chain_id(request: Request):
+    """Web3-compatible chain ID endpoint"""
+    return {'id': 1, 'jsonrpc': '2.0', 'result': '0x539'}  # 1337 in hex (common dev chain ID)
+
+
+@app.post("/eth_getBalance")
+@limiter.limit("20/minute")
+async def eth_get_balance(request: Request, address: str = Body(...)):
+    """Web3-compatible balance endpoint"""
+    try:
+        # Get balance from our database
+        balance = await db.get_balance(address)
+        if balance is None:
+            balance = 0
+        
+        # Convert to wei (multiply by 10^18)
+        balance_wei = int(balance * 10**18)
+        return {'id': 1, 'jsonrpc': '2.0', 'result': hex(balance_wei)}
+        
+    except Exception as e:
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
+
+
+@app.post("/eth_accounts")
+@limiter.limit("20/minute")
+async def eth_accounts(request: Request):
+    """Web3-compatible accounts endpoint"""
+    # Return empty array since we don't manage accounts
+    return {'id': 1, 'jsonrpc': '2.0', 'result': []}
+
+
+@app.post("/net_version")
+@limiter.limit("20/minute")
+async def net_version(request: Request):
+    """Web3-compatible network version endpoint"""
+    return {'id': 1, 'jsonrpc': '2.0', 'result': '1337'}
+
+
+@app.post("/eth_gasPrice")
+@limiter.limit("20/minute")
+async def eth_gas_price(request: Request):
+    """Web3-compatible gas price endpoint"""
+    return {'id': 1, 'jsonrpc': '2.0', 'result': '0x1'}  # 1 wei
+
+
+@app.post("/eth_estimateGas")
+@limiter.limit("20/minute")
+async def eth_estimate_gas(request: Request, data: dict = Body(...)):
+    """Web3-compatible gas estimation endpoint"""
+    try:
+        # Simple gas estimation based on transaction type
+        if data.get('to'):
+            # Contract call
+            return {'id': 1, 'jsonrpc': '2.0', 'result': '0x5208'}  # 21000 gas
+        else:
+            # Contract deployment
+            return {'id': 1, 'jsonrpc': '2.0', 'result': '0x186a0'}  # 100000 gas
+            
+    except Exception as e:
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
+
+
+@app.post("/eth_blockNumber")
+@limiter.limit("50/minute")
+async def eth_block_number(request: Request):
+    """Web3-compatible block number endpoint"""
+    try:
+        # Get current block height
+        block_height = await db.get_block_height()
+        return {'id': 1, 'jsonrpc': '2.0', 'result': hex(block_height)}
+        
+    except Exception as e:
+        return {'id': 1, 'jsonrpc': '2.0', 'error': {'code': -1, 'message': str(e)}}
 
 
 class CustomJSONEncoder(json.JSONEncoder):

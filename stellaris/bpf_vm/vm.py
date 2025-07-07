@@ -1,5 +1,5 @@
 """
-BPF Virtual Machine for secure execution of BPF programs
+BPF Virtual Machine for secure execution of BPF programs with EVM compatibility
 """
 
 import time
@@ -33,7 +33,7 @@ class BPFVirtualMachine:
     
     def __init__(self, gas_limit: int = 100000):
         """
-        Initialize BPF VM with security limits
+        Initialize BPF VM with security limits and EVM compatibility
         
         Args:
             gas_limit: Maximum gas for execution
@@ -47,6 +47,10 @@ class BPFVirtualMachine:
         self.instructions_executed = 0
         self.start_time = 0
         self.is_running = False
+        
+        # EVM compatibility flag
+        self.evm_mode = False
+        self.evm_compat = None
         
         # Security context
         self.allowed_syscalls = {
@@ -211,20 +215,27 @@ class BPFVirtualMachine:
         self.is_running = False
         return self.registers[0]  # Return value in r0
     
-    def execute(self, bytecode: bytes, input_data: Optional[bytes] = None) -> int:
+    def execute(self, bytecode: bytes, input_data: Optional[bytes] = None, 
+                evm_mode: bool = False) -> int:
         """
-        Execute BPF program with security controls
+        Execute BPF program or EVM bytecode with security controls
         
         Args:
-            bytecode: BPF bytecode to execute
+            bytecode: BPF bytecode or EVM bytecode to execute
             input_data: Input data for the program
+            evm_mode: Whether to execute as EVM bytecode
             
         Returns:
-            Exit code from program
+            Exit code from program or EVM execution result
         """
         if len(bytecode) == 0:
             raise BPFExecutionError("Empty bytecode")
         
+        # Check if this is EVM bytecode execution
+        if evm_mode:
+            return self._execute_evm(bytecode, input_data or b'')
+        
+        # Original BPF execution
         if len(bytecode) % 8 != 0:
             raise BPFExecutionError("Invalid bytecode length")
         
@@ -265,6 +276,33 @@ class BPFVirtualMachine:
             # Clean up and re-raise
             self.is_running = False
             raise
+    
+    def _execute_evm(self, bytecode: bytes, input_data: bytes) -> int:
+        """Execute EVM bytecode using compatibility layer"""
+        # Lazy import to avoid circular dependencies
+        from .evm_compat import EVMCompatibilityLayer
+        
+        if not self.evm_compat:
+            self.evm_compat = EVMCompatibilityLayer(self)
+        
+        try:
+            return_data, gas_used = self.evm_compat.execute_evm_bytecode(bytecode, input_data)
+            self.gas_used = gas_used
+            return 0  # Success
+        except Exception as e:
+            raise BPFExecutionError(f"EVM execution failed: {e}")
+    
+    def get_evm_return_data(self) -> bytes:
+        """Get return data from EVM execution"""
+        if self.evm_compat:
+            return self.evm_compat.return_data
+        return b''
+    
+    def get_evm_storage(self) -> Dict[int, int]:
+        """Get EVM storage state"""
+        if self.evm_compat:
+            return self.evm_compat.evm_storage
+        return {}
     
     def reset(self):
         """Reset VM state"""

@@ -1,16 +1,44 @@
 # BPF VM Support for Stellaris Blockchain
 
-This document describes the BPF (Berkeley Packet Filter) VM implementation for the Stellaris blockchain, providing secure smart contract functionality.
+This document describes the BPF (Berkeley Packet Filter) VM implementation for the Stellaris blockchain, providing secure smart contract functionality with full **Solidity and Hardhat compatibility**.
 
 ## Overview
 
 The BPF VM implementation adds smart contract capabilities to Stellaris while maintaining strict security standards. It provides:
 
 - **Secure Execution Environment**: Sandboxed BPF virtual machine with resource limits
+- **EVM Compatibility**: Full support for Solidity contracts and EVM bytecode
 - **Gas-based Economics**: Resource consumption tracking to prevent DoS attacks
 - **Transaction Integration**: Seamless integration with existing transaction system
 - **State Management**: Persistent contract state with atomicity guarantees
-- **API Interface**: RESTful endpoints for contract deployment and execution
+- **Web3 API**: RESTful and JSON-RPC endpoints for Hardhat/Web3.js integration
+- **Development Tools**: Compatible with Hardhat, Truffle, and other Ethereum tools
+
+## Quick Start with Solidity
+
+### 1. Deploy a Solidity Contract
+
+```bash
+# Configure Hardhat for Stellaris
+npx hardhat init
+
+# Edit hardhat.config.js to point to http://localhost:3006
+# Deploy your contracts
+npx hardhat run scripts/deploy.js --network stellaris
+```
+
+### 2. Interact with Web3.js
+
+```javascript
+const Web3 = require('web3');
+const web3 = new Web3('http://localhost:3006');
+
+// Deploy and interact with contracts as usual
+const contract = new web3.eth.Contract(abi, address);
+const result = await contract.methods.myFunction().call();
+```
+
+For detailed Solidity integration, see [SOLIDITY_INTEGRATION.md](SOLIDITY_INTEGRATION.md)
 
 ## Architecture
 

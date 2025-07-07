@@ -24,9 +24,9 @@ class BPFExecutor:
     
     def deploy_contract(self, bytecode: bytes, abi: Dict[str, Any], creator: str, 
                        initial_state: Optional[Dict[str, Any]] = None,
-                       gas_limit: int = 100000) -> BPFContract:
+                       gas_limit: int = 100000, contract_type: str = 'bpf') -> BPFContract:
         """
-        Deploy a new BPF contract
+        Deploy a new BPF or EVM contract
         
         Args:
             bytecode: Contract bytecode
@@ -34,6 +34,7 @@ class BPFExecutor:
             creator: Address of contract creator
             initial_state: Initial contract state
             gas_limit: Gas limit for deployment
+            contract_type: Type of contract ('bpf' or 'evm')
             
         Returns:
             Deployed contract instance
@@ -44,7 +45,8 @@ class BPFExecutor:
             abi=abi,
             creator=creator,
             initial_state=initial_state,
-            gas_limit=gas_limit
+            gas_limit=gas_limit,
+            contract_type=contract_type
         )
         
         # Validate contract can be deployed
@@ -74,7 +76,7 @@ class BPFExecutor:
     def call_contract(self, contract_address: str, function_name: str, 
                      args: List[Any], caller: str, gas_limit: Optional[int] = None) -> Tuple[Any, int]:
         """
-        Call a contract function
+        Call a contract function (BPF or EVM)
         
         Args:
             contract_address: Address of the contract
@@ -96,8 +98,76 @@ class BPFExecutor:
         if not contract.has_function(function_name):
             raise BPFExecutionError(f"Function '{function_name}' not found in contract")
         
+        # Set gas limit
+        if gas_limit is None:
+            gas_limit = contract.gas_limit
+        
+        # Execute based on contract type
+        if contract.is_solidity_contract():
+            return self._call_evm_contract(contract, function_name, args, caller, gas_limit)
+        else:
+            return self._call_bpf_contract(contract, function_name, args, caller, gas_limit)
+    
+    def _call_evm_contract(self, contract: BPFContract, function_name: str, 
+                          args: List[Any], caller: str, gas_limit: int) -> Tuple[Any, int]:
+        """Call EVM/Solidity contract function"""
+        # Encode function call
+        call_data = contract.encode_function_call(function_name, args)
+        
+        # Create VM instance
+        vm = BPFVirtualMachine(gas_limit=gas_limit)
+        
+        # Execute EVM bytecode
+        try:
+            result = vm.execute(contract.bytecode, call_data, evm_mode=True)
+            return_data = vm.get_evm_return_data()
+            
+            # Decode return data
+            if return_data:
+                decoded_result = contract.decode_function_output(return_data, function_name)
+                return decoded_result, vm.gas_used
+            else:
+                return None, vm.gas_used
+                
+        except Exception as e:
+            raise BPFExecutionError(f"EVM contract execution failed: {e}")
+    
+    def _call_bpf_contract(self, contract: BPFContract, function_name: str, 
+                          args: List[Any], caller: str, gas_limit: int) -> Tuple[Any, int]:
+        """Call BPF contract function"""
         # Get function signature
         func_sig = contract.get_function_signature(function_name)
+        
+        # Validate arguments
+        expected_inputs = func_sig.get('inputs', [])
+        if len(args) != len(expected_inputs):
+            raise BPFExecutionError(f"Function '{function_name}' expects {len(expected_inputs)} arguments, got {len(args)}")
+        
+        # Prepare execution context
+        context = {
+            'function': function_name,
+            'args': args,
+            'caller': caller,
+            'contract_address': contract.address,
+            'contract_state': contract.state.copy()
+        }
+        
+        # Encode input data
+        input_data = contract.encode_function_call(function_name, args)
+        
+        # Create VM instance
+        vm = BPFVirtualMachine(gas_limit=gas_limit)
+        
+        # Execute BPF bytecode
+        try:
+            result = vm.execute(contract.bytecode, input_data, evm_mode=False)
+            
+            # For BPF contracts, the result is the return value
+            # In a real implementation, you'd want more sophisticated result handling
+            return result, vm.gas_used
+            
+        except Exception as e:
+            raise BPFExecutionError(f"BPF contract execution failed: {e}")
         
         # Validate arguments
         self._validate_function_args(func_sig, args)
