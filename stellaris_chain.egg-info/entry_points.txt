@@ -1,0 +1,3 @@
+[console_scripts]
+stellaris-miner = miner:main
+stellaris-node = stellaris.node.main:main
