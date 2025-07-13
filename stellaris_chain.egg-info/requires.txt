@@ -1,7 +1,4 @@
 pydantic>=2.11.5
-mypy==1.16.0
-pytest==8.3.5
-kvprocessor>=0.2.14
 fastapi>=0.115.12
 httpx==0.28.1
 aiohttp>=3.8.0
@@ -9,10 +6,9 @@ requests>=2.28.0
 uvicorn>=0.34.2
 cryptography>=45.0.3
 colorama==0.4.6
-dotenv>=0.9.9
+python-dotenv>=0.9.9
 rsa>=4.9.1
 psutil>=7.0.0
-fastapi[standard]
 kytan-py>=0.1.0
 modern-benchmark>=0.1.0
 libp2p>=0.2.8
@@ -25,13 +21,11 @@ pickleDB~=0.9.2
 base58>=1.0.3
 slowapi
 starlette
+kvprocessor>=0.2.14
+p2pd
+
+[dev]
+mypy==1.16.0
+pytest==8.3.5
 maturin
 pip-tools
-p2pd
-pip <= 23.3.1
-twine
-# BPF VM dependencies
-bcc>=0.18.0
-py-solc-x>=2.0.0
-cbor2>=5.4.0
-pycryptodome>=3.18.0

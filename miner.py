@@ -21,7 +21,7 @@ def run(start: int = 0, step: int = 1, res: dict = None):
     difficulty = res['difficulty']
     decimal = difficulty % 1
     last_block = res['last_block']
-    last_block['hash'] = last_block['hash'] if 'hash' in last_block else (30_06_2005).to_bytes(32, ENDIAN).hex()
+    last_block['hash'] = last_block['hash'] if 'hash' in last_block else (1_062_005).to_bytes(32, ENDIAN).hex()
     last_block['id'] = last_block['id'] if 'id' in last_block else 0
     chunk = last_block['hash'][-int(difficulty):]
 
@@ -74,6 +74,10 @@ def run(start: int = 0, step: int = 1, res: dict = None):
             print(res := r.json())
             if res['ok']:
                 print('BLOCK MINED\n\n')
+                # Wait for the node to process the block before exiting
+                # This prevents race conditions where we restart mining
+                # before the pending transactions are cleared
+                #time.sleep(2)
             exit()
 
 
@@ -81,8 +85,8 @@ def worker(start: int, step: int, res: dict):
     while True:
         try:
             run(start, step, res)
-        except Exception:
-            raise
+        except Exception as e:
+            print(f"Worker {start + 1} error: {e}")
             time.sleep(3)
 
 
@@ -113,3 +117,7 @@ if __name__ == '__main__':
                 break
         for p in processes:
             p.kill()
+        
+        # Add a short delay before restarting to allow network propagation
+        # and prevent mining the same transactions immediately
+        time.sleep(3)

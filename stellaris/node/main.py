@@ -536,13 +536,46 @@ async def sync(request: Request, node_url: str = None):
     is_syncing = False
 
 
+async def sync_pending_transactions():
+    """Sync pending transactions from other nodes if we have none"""
+    if await db.get_pending_transactions_limit(1, hex_only=True):
+        return  # We already have pending transactions
+    
+    nodes = NodesManager.get_recent_nodes()
+    for node_url in nodes:
+        try:
+            node_interface = NodeInterface(node_url)
+            response = await node_interface.request('get_pending_transactions', {})
+            if response.get('ok') and response.get('result'):
+                remote_txs = response['result'][:10]  # Get up to 10 transactions
+                for tx_hex in remote_txs:
+                    try:
+                        tx = await Transaction.from_hex(tx_hex)
+                        await db.add_pending_transaction(tx)
+                        print(f"Synced transaction from {node_url}: {tx.hash()}")
+                    except Exception as e:
+                        print(f"Failed to sync transaction {tx_hex[:16]}...: {e}")
+                if remote_txs:
+                    print(f"Synced {len(remote_txs)} pending transactions from {node_url}")
+                    break  # Stop after successfully syncing from one node
+        except Exception as e:
+            print(f"Failed to sync pending transactions from {node_url}: {e}")
+
+
 LAST_PENDING_TRANSACTIONS_CLEAN = [0]
+LAST_PENDING_SYNC = [0]
 
 
 @app.get("/get_mining_info")
 async def get_mining_info(background_tasks: BackgroundTasks, pretty: bool = False):
     Manager.difficulty = None
     difficulty, last_block = await get_difficulty()
+    
+    # Sync pending transactions if we have none and it's been a while
+    if LAST_PENDING_SYNC[0] < timestamp() - 30:  # Sync every 30 seconds
+        LAST_PENDING_SYNC[0] = timestamp()
+        background_tasks.add_task(sync_pending_transactions)
+    
     pending_transactions = await db.get_pending_transactions_limit(hex_only=True)
     pending_transactions = sorted(pending_transactions)
     if LAST_PENDING_TRANSACTIONS_CLEAN[0] < timestamp() - 600:
@@ -553,7 +586,7 @@ async def get_mining_info(background_tasks: BackgroundTasks, pretty: bool = Fals
         'difficulty': difficulty,
         'last_block': last_block,
         'pending_transactions': pending_transactions[:10],
-        'pending_transactions_hashes': [sha256(tx) for tx in pending_transactions],
+        'pending_transactions_hashes': [sha256(tx) for tx in pending_transactions[:10]],
         'merkle_root': get_transactions_merkle_tree(pending_transactions[:10])
     }}
     return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
