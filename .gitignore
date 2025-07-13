@@ -3,6 +3,7 @@ __pycache__
 struct
 *.log
 flag.txt
+.pypirc
 # I swear, I'm not a vibe coder, I just use GROK, to make sure that I follow decent coding practices
 grok.txt
 install-docker.sh
