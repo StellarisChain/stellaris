@@ -7,6 +7,7 @@ import re
 import json
 from decimal import Decimal
 from datetime import datetime 
+from typing import List, Dict, Optional
 
 from asyncpg import UniqueViolationError
 from fastapi import FastAPI, Body, Query
