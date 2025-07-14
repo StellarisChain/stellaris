@@ -1,0 +1,27 @@
+{
+  "name": "stellaris-web3js-example",
+  "version": "1.0.0",
+  "description": "Web3.js examples for Stellaris blockchain",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-erc20.js",
+    "interact": "node interact-erc20.js",
+    "basic": "node basic-example.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "web3",
+    "stellaris",
+    "blockchain",
+    "ethereum",
+    "smart-contracts",
+    "erc20"
+  ],
+  "author": "Stellaris Team",
+  "license": "MIT",
+  "dependencies": {
+    "web3": "^4.0.0",
+    "dotenv": "^16.0.0"
+  }
+}

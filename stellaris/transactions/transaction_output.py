@@ -1,12 +1,11 @@
 from decimal import Decimal
-
+from fastecdasda.point import Point
 from stellaris.constants import ENDIAN, SMALLEST, CURVE
 from stellaris.utils.general import byte_length, string_to_point, string_to_bytes
 
 
 class TransactionOutput:
     def __init__(self, address: str, amount: Decimal):
-        from fastecdsa.point import Point
         if isinstance(address, Point):
             raise Exception('TransactionOutput does not accept Point anymore. Pass the address string instead')
         self.address = address
