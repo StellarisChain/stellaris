@@ -25,3 +25,5 @@ stellaris-prototype-v2
 *.egg-info
 .pypirc
 stellaris-chain.egg-info
+node_modules
+.pnpm_store
