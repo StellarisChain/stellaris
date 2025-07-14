@@ -1,0 +1,7 @@
+onlyBuiltDependencies:
+  - '@trufflesuite/bigint-buffer'
+  - bufferutil
+  - core-js-pure
+  - keccak
+  - secp256k1
+  - utf-8-validate
