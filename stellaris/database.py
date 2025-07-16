@@ -260,7 +260,7 @@ class Database:
     async def get_pending_transactions_limit(self, limit: int = MAX_BLOCK_SIZE_HEX, hex_only: bool = False, check_signatures: bool = True) -> List[Union[Transaction, str]]:
         # Sort by fee efficiency (fees per byte), then by size, then by tx_hex
         pending_txs = list(self._pending_transactions.values())
-        pending_txs.sort(key=lambda tx: (-tx['fees'] / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
+        pending_txs.sort(key=lambda tx: (-float(tx['fees']) / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
         
         return_txs = []
         size = 0
@@ -278,7 +278,7 @@ class Database:
     async def get_need_propagate_transactions(self, last_propagation_delta: int = 600, limit: int = MAX_BLOCK_SIZE_HEX) -> List[Union[Transaction, str]]:
         current_time = datetime.now(timezone.utc)
         pending_txs = list(self._pending_transactions.values())
-        pending_txs.sort(key=lambda tx: (-tx['fees'] / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
+        pending_txs.sort(key=lambda tx: (-float(tx['fees']) / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
         
         return_txs = []
         size = 0
@@ -304,7 +304,7 @@ class Database:
     async def get_next_block_average_fee(self):
         limit = MAX_BLOCK_SIZE_HEX
         pending_txs = list(self._pending_transactions.values())
-        pending_txs.sort(key=lambda tx: (-tx['fees'] / len(tx['tx_hex']), len(tx['tx_hex'])))
+        pending_txs.sort(key=lambda tx: (-float(tx['fees']) / len(tx['tx_hex']), len(tx['tx_hex'])))
         
         fees = []
         size = 0
