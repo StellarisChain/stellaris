@@ -245,7 +245,8 @@ class Database:
     async def get_need_propagate_transactions(self, last_propagation_delta: int = 600, limit: int = MAX_BLOCK_SIZE_HEX) -> List[Union[Transaction, str]]:
         current_time = datetime.now(timezone.utc)
         pending_txs = list(self._pending_transactions.values())
-        pending_txs.sort(key=lambda tx: (-tx['fees'] / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
+        from decimal import Decimal
+        pending_txs.sort(key=lambda tx: (-Decimal(tx['fees']) / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
         
         return_txs = []
         size = 0

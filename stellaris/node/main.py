@@ -111,6 +111,7 @@ async def create_blocks(blocks: list):
 async def _sync_blockchain(node_url: str = None):
     print('sync blockchain')
     if not node_url:
+        #node_url = "https://stellaris-node.connor33341.dev/"
         nodes = NodesManager.get_recent_nodes()
         if not nodes:
             return

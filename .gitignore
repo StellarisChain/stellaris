@@ -21,3 +21,6 @@ json-loader.sh
 dev-configs
 stellaris-prototype
 stellaris-prototype-v2
+.pnpm-store
+node_modules
+.pypirc
