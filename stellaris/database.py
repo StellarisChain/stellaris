@@ -227,7 +227,12 @@ class Database:
     async def get_pending_transactions_limit(self, limit: int = MAX_BLOCK_SIZE_HEX, hex_only: bool = False, check_signatures: bool = True) -> List[Union[Transaction, str]]:
         # Sort by fee efficiency (fees per byte), then by size, then by tx_hex
         pending_txs = list(self._pending_transactions.values())
-        pending_txs.sort(key=lambda tx: (-tx['fees'] / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
+        def safe_fee(tx):
+            fee = tx.get('fees', 0)
+            if fee is None:
+                fee = 0
+            return -fee / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']
+        pending_txs.sort(key=safe_fee)
         
         return_txs = []
         size = 0
@@ -246,7 +251,12 @@ class Database:
         current_time = datetime.now(timezone.utc)
         pending_txs = list(self._pending_transactions.values())
         from decimal import Decimal
-        pending_txs.sort(key=lambda tx: (-Decimal(tx['fees']) / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
+        def safe_fee(tx):
+            fee = tx.get('fees', 0)
+            if fee is None:
+                fee = 0
+            return -Decimal(fee) / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']
+        pending_txs.sort(key=safe_fee)
         
         return_txs = []
         size = 0

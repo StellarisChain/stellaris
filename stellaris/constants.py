@@ -1,7 +1,7 @@
 from fastecdsa import curve
 
 ENDIAN = 'little'
-CURVE = curve.P256
+CURVE = curve.secp256k1
 SMALLEST = 1000000
 MAX_SUPPLY = 1_062_005
 VERSION = 1

@@ -149,7 +149,6 @@ async def _sync_blockchain(node_url: str = None):
             blocks = await node_interface.get_blocks(i, limit)
         except Exception as e:
             print(e)
-            #NodesManager.get_nodes().remove(node_url)
             NodesManager.sync()
             break
         try:
@@ -159,11 +158,30 @@ async def _sync_blockchain(node_url: str = None):
                 if last_block['id'] > starting_from:
                     NodesManager.update_last_message(node_url)
                     if timestamp() - last_block['timestamp'] < 86400:
-                        # if last block is from less than a day ago, propagate it
                         txs_hashes = await db.get_block_transaction_hashes(last_block['hash'])
                         await propagate('push_block', {'block_content': last_block['content'], 'txs': txs_hashes, 'block_no': last_block['id']}, node_url)
+                # --- Fetch and import remote pending transactions ---
+                import httpx
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(f"{node_url}/get_pending_transactions")
+                        if resp.status_code == 200:
+                            remote_pending = resp.json().get('result', [])
+                            for tx_hex in remote_pending:
+                                try:
+                                    tx = await Transaction.from_hex(tx_hex)
+                                    tx_hash = tx.hash()
+                                    # Only add if not in chain or local pending
+                                    if tx_hash not in db._pending_transactions and not await db.get_transaction(tx_hash, check_signatures=False):
+                                        await db.add_pending_transaction(tx, verify=False)
+                                except Exception as e:
+                                    print(f"Failed to import remote pending tx: {e}")
+                except Exception as e:
+                    print(f"Failed to fetch remote pending transactions: {e}")
                 break
             assert await create_blocks(blocks)
+            # Optionally clear duplicates
+            # await db.clear_duplicate_pending_transactions()
         except Exception as e:
             print(e)
             if local_cache is not None:
