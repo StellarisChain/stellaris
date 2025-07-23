@@ -86,7 +86,22 @@ def bytes_to_point(point_bytes: bytes) -> Point:
     elif len(point_bytes) == 33:
         specifier = point_bytes[0]
         x = int.from_bytes(point_bytes[1:], ENDIAN)
-        return Point(x, x_to_y(x, specifier == 43), CURVE)
+        # secp256k1 compressed format: 0x02 = even y, 0x03 = odd y
+        if specifier == 0x02:
+            is_odd = False
+        elif specifier == 0x03:
+            is_odd = True
+        else:
+            # fallback for legacy 42/43
+            if specifier == 42:
+                is_odd = False
+            elif specifier == 43:
+                is_odd = True
+            else:
+                raise ValueError(f"Unknown compressed key specifier: {specifier}")
+        y = x_to_y(x, is_odd)
+        pt = Point(x, y, CURVE)
+        return pt
     else:
         raise NotImplementedError()
 
