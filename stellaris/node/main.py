@@ -31,6 +31,7 @@ from stellaris.node.utils import ip_is_local
 from stellaris.transactions import Transaction, CoinbaseTransaction
 from stellaris.database import Database
 from stellaris.constants import VERSION, ENDIAN
+from typing import List, Dict, Optional
 
 
 limiter = Limiter(key_func=get_remote_address)
