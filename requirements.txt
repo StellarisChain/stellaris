@@ -31,7 +31,7 @@ p2pd
 pip <= 23.3.1
 twine
 # BPF VM dependencies
-bcc>=0.18.0
+bcc>=0.1.8
 py-solc-x>=2.0.0
 cbor2>=5.4.0
 pycryptodome>=3.18.0
