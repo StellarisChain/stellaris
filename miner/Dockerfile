@@ -4,6 +4,8 @@ WORKDIR /app
 
 # Copy cached requirements file (created by build.sh)
 COPY requirements.cache.txt requirements.txt
+# Copy cached stellaris package (created by build.sh)
+COPY stellaris.cache/ stellaris/
 # Copy miner directory contents
 COPY . .
 
