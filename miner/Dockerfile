@@ -1,7 +1,10 @@
 FROM python:3.12-slim
 
 WORKDIR /app
-COPY ../requirements.txt .
+
+# Copy cached requirements file (created by build.sh)
+COPY requirements.cache.txt requirements.txt
+# Copy miner directory contents
 COPY . .
 
 RUN apt-get update -y && apt-get upgrade -y 
