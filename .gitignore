@@ -24,3 +24,4 @@ stellaris-prototype-v2
 .pnpm-store
 node_modules
 .pypirc
+*.cache.txt

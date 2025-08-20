@@ -141,6 +141,16 @@ if ! check_docker; then
     exit 1
 fi
 
+# Copy parent requirements.txt to local cache
+print_color $BLUE "\nPreparing requirements..."
+if [ -f "../requirements.txt" ]; then
+    cp "../requirements.txt" "requirements.cache.txt"
+    print_color $GREEN "✓ Copied parent requirements.txt to requirements.cache.txt"
+else
+    print_color $RED "✗ Parent requirements.txt not found"
+    exit 1
+fi
+
 # Build the Docker image
 print_color $BLUE "\nStarting Docker build..."
 print_color $BLUE "Build context: $(pwd)"
