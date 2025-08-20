@@ -1,2 +1,5 @@
 # Cached requirements file (created by build.sh)
 requirements.cache.txt
+
+# Cached stellaris package (created by build.sh)
+stellaris.cache/

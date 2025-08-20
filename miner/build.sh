@@ -151,6 +151,18 @@ else
     exit 1
 fi
 
+# Copy stellaris package to local cache
+print_color $BLUE "Preparing stellaris package..."
+if [ -d "../stellaris" ]; then
+    # Remove existing stellaris cache if it exists
+    rm -rf "stellaris.cache"
+    cp -r "../stellaris" "stellaris.cache"
+    print_color $GREEN "✓ Copied stellaris package to stellaris.cache"
+else
+    print_color $RED "✗ Parent stellaris package not found"
+    exit 1
+fi
+
 # Build the Docker image
 print_color $BLUE "\nStarting Docker build..."
 print_color $BLUE "Build context: $(pwd)"
