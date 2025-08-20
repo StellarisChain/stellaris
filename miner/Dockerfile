@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
 WORKDIR /app
+COPY ../requirements.txt .
 COPY . .
 
 RUN apt-get update -y && apt-get upgrade -y 
