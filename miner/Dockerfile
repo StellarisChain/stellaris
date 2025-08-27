@@ -14,4 +14,4 @@ RUN apt-get install -y libgmp3-dev gcc
 
 RUN pip install -r requirements.txt
 
-CMD ["python", "miner.py", "DWMVFcRTZ8UMaWr2vsb7XkTmh7zaA57BQaDRGiAKB6qX6", "4", "https://stellaris-node.connor33341.dev/"]
+CMD ["python", "miner.py", "DWMVFcRTZ8UMaWr2vsb7XkTmh7zaA57BQaDRGiAKB6qX6", "10", "https://stellaris-node.connor33341.dev/"]
