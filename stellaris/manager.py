@@ -5,7 +5,7 @@ from math import ceil, floor, log
 from typing import Tuple, List, Union
 
 from stellaris.database import Database, OLD_BLOCKS_TRANSACTIONS_ORDER
-from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX
+from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX, BLOCK_CONFIG
 from stellaris.utils.general import sha256, timestamp, bytes_to_string, string_to_bytes
 from stellaris.transactions import CoinbaseTransaction, Transaction
 from stellaris.utils.block_utils import calculate_difficulty, difficulty_to_hashrate, difficulty_to_hashrate_old, hashrate_to_difficulty, hashrate_to_difficulty_old, hashrate_to_difficulty_wrong, BLOCK_TIME, BLOCKS_COUNT, START_DIFFICULTY
@@ -38,16 +38,27 @@ async def check_block_is_valid(block_content: str, mining_info: tuple = None) ->
 
 
 def get_block_reward(number: int) -> Decimal:
-    divider = floor(number / 150000)
-    if divider == 0:
-        return Decimal(100)
-    if divider > 8:
-        if number < 150000 * 9 + 458732 - 150000:
-            return Decimal('0.390625')
-        elif number < 150000 * 9 + 458733 - 150000 + 320:
-            return Decimal('0.3125')
-        return Decimal(0)
-    return Decimal(100) / (2 ** Decimal(divider))
+    """Get block reward based on XML configuration."""
+    # If no ranges are configured, fall back to original logic
+    if not BLOCK_CONFIG.get('ranges'):
+        divider = floor(number / 150000)
+        if divider == 0:
+            return Decimal(100)
+        if divider > 8:
+            if number < 150000 * 9 + 458732 - 150000:
+                return Decimal('0.390625')
+            elif number < 150000 * 9 + 458733 - 150000 + 320:
+                return Decimal('0.3125')
+            return Decimal(0)
+        return Decimal(100) / (2 ** Decimal(divider))
+    
+    # Use XML configuration
+    for range_config in BLOCK_CONFIG['ranges']:
+        if range_config['min_index'] <= number <= range_config['max_index']:
+            return Decimal(str(range_config['reward']))
+    
+    # If block number is beyond all configured ranges, return 0
+    return Decimal(0)
 
 
 def __check():

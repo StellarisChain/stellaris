@@ -25,3 +25,4 @@ stellaris-prototype-v2
 node_modules
 .pypirc
 *.cache.txt
+test_*

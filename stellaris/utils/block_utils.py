@@ -3,12 +3,27 @@ from decimal import Decimal
 from io import BytesIO
 from math import ceil, floor, log
 from typing import Tuple, List, Union
-from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX
+from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX, BLOCK_CONFIG
 from stellaris.database import Database
 
 BLOCK_TIME = 180
 BLOCKS_COUNT = Decimal(500)
 START_DIFFICULTY = Decimal('6.0')
+
+
+def get_max_difficulty_for_block(block_number: int) -> Decimal:
+    """Get maximum difficulty for a given block number based on XML configuration."""
+    # If no ranges are configured, return no limit (very high value)
+    if not BLOCK_CONFIG.get('ranges'):
+        return Decimal('999.0')  # Effectively no limit
+    
+    # Find the range that contains this block number
+    for range_config in BLOCK_CONFIG['ranges']:
+        if range_config['min_index'] <= block_number <= range_config['max_index']:
+            return Decimal(str(range_config['max_difficulty']))
+    
+    # If block number is beyond all configured ranges, return no limit
+    return Decimal('999.0')
 
 def difficulty_to_hashrate_old(difficulty: Decimal) -> int:
     decimal = difficulty % 1 or 1/16
@@ -84,6 +99,13 @@ async def calculate_difficulty() -> Tuple[Decimal, dict]:
             new_difficulty = hashrate_to_difficulty_wrong(hashrate)
         else:
             new_difficulty = hashrate_to_difficulty(hashrate)
+        
+        # Apply maximum difficulty constraint for the next block
+        next_block_number = last_block['id'] + 1
+        max_difficulty = get_max_difficulty_for_block(next_block_number)
+        if new_difficulty > max_difficulty:
+            new_difficulty = max_difficulty
+        
         return new_difficulty, last_block
 
     return last_block['difficulty'], last_block
