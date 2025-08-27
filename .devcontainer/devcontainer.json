@@ -18,9 +18,9 @@
 		}
 	},
 
-	"runArgs": [
+	/*"runArgs": [
 		"--network=voxacommunications-backend_default"
-	],
+	],*/
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
@@ -29,7 +29,7 @@
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "cargo install --git https://github.com/RustPython/RustPython rustpython",
+	//"postCreateCommand": "cargo install --git https://github.com/RustPython/RustPython rustpython",
 
 	// Configure tool-specific properties.
 	// "customizations": {},
