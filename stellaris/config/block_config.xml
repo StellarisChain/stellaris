@@ -1,10 +1,14 @@
 <BlockConfig>
-    <Range minIndex="0" maxIndex="2000">
+    <!-- activationBlock: Block number from which this configuration becomes active -->
+    <!-- Blocks before this number will use the legacy reward system -->
+    <ActivationBlock>2636</ActivationBlock>
+
+    <Range minIndex="2636" maxIndex="10000">
         <Reward>10000</Reward>
-        <MaxDifficulty>7.8</MaxDifficulty>
+        <MaxDifficulty>5.6</MaxDifficulty>
     </Range>
     <Range minIndex="previous" maxIndex="50000">
-        <Reward>100</Reward>
+        <Reward>10</Reward>
         <MaxDifficulty>8.6</MaxDifficulty>
     </Range>
     <Range minIndex="previous" maxIndex="150000">

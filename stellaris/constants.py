@@ -17,6 +17,10 @@ def _load_block_config():
         tree = ET.parse(config_path)
         root = tree.getroot()
         
+        # Parse activation block
+        activation_elem = root.find('ActivationBlock')
+        activation_block = int(activation_elem.text) if activation_elem is not None else 0
+        
         ranges = []
         prev_max = 0
         
@@ -43,10 +47,16 @@ def _load_block_config():
             ranges.append(range_config)
             prev_max = max_index
         
-        return {'ranges': ranges}
+        return {
+            'activation_block': activation_block,
+            'ranges': ranges
+        }
     
     except (ET.ParseError, FileNotFoundError, ValueError) as e:
         # Return empty config if file can't be loaded
-        return {'ranges': []}
+        return {
+            'activation_block': 0,
+            'ranges': []
+        }
 
 BLOCK_CONFIG = _load_block_config()

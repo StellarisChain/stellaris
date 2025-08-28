@@ -39,8 +39,11 @@ async def check_block_is_valid(block_content: str, mining_info: tuple = None) ->
 
 def get_block_reward(number: int) -> Decimal:
     """Get block reward based on XML configuration."""
-    # If no ranges are configured, fall back to original logic
-    if not BLOCK_CONFIG.get('ranges'):
+    # Check if XML configuration is loaded and if block is after activation point
+    activation_block = BLOCK_CONFIG.get('activation_block', 0)
+    
+    # If no ranges are configured or block is before activation, fall back to original logic
+    if not BLOCK_CONFIG.get('ranges') or number < activation_block:
         divider = floor(number / 150000)
         if divider == 0:
             return Decimal(100)
@@ -52,7 +55,7 @@ def get_block_reward(number: int) -> Decimal:
             return Decimal(0)
         return Decimal(100) / (2 ** Decimal(divider))
     
-    # Use XML configuration
+    # Use XML configuration for blocks at or after activation block
     for range_config in BLOCK_CONFIG['ranges']:
         if range_config['min_index'] <= number <= range_config['max_index']:
             return Decimal(str(range_config['reward']))
