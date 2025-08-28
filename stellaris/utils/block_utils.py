@@ -7,7 +7,7 @@ from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX, BLOCK_CO
 from stellaris.database import Database
 
 BLOCK_TIME = 30
-BLOCKS_COUNT = Decimal(500)
+BLOCKS_COUNT = Decimal(100)
 START_DIFFICULTY = Decimal('6.0')
 
 
