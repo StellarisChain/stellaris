@@ -6,7 +6,7 @@ from typing import Tuple, List, Union
 from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX, BLOCK_CONFIG
 from stellaris.database import Database
 
-BLOCK_TIME = 180
+BLOCK_TIME = 30
 BLOCKS_COUNT = Decimal(500)
 START_DIFFICULTY = Decimal('6.0')
 
