@@ -227,7 +227,17 @@ class Database:
     async def get_pending_transactions_limit(self, limit: int = MAX_BLOCK_SIZE_HEX, hex_only: bool = False, check_signatures: bool = True) -> List[Union[Transaction, str]]:
         # Sort by fee efficiency (fees per byte), then by size, then by tx_hex
         pending_txs = list(self._pending_transactions.values())
-        pending_txs.sort(key=lambda tx: (-float(tx['fees']) / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
+        def safe_fee(tx):
+            fee = tx.get('fees', 0)
+            if fee is None:
+                fee = 0
+            # Ensure fee is numeric (convert from string if necessary due to JSON serialization)
+            try:
+                fee = float(fee) if isinstance(fee, str) else fee
+            except (ValueError, TypeError):
+                fee = 0
+            return -fee / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']
+        pending_txs.sort(key=safe_fee)
         
         return_txs = []
         size = 0
@@ -245,8 +255,18 @@ class Database:
     async def get_need_propagate_transactions(self, last_propagation_delta: int = 600, limit: int = MAX_BLOCK_SIZE_HEX) -> List[Union[Transaction, str]]:
         current_time = datetime.now(timezone.utc)
         pending_txs = list(self._pending_transactions.values())
-        from decimal import Decimal
-        pending_txs.sort(key=lambda tx: (-Decimal(tx['fees']) / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']))
+        from decimal import Decimal, InvalidOperation
+        def safe_fee(tx):
+            fee = tx.get('fees', 0)
+            if fee is None:
+                fee = 0
+            # Ensure fee is numeric (convert from string if necessary due to JSON serialization)
+            try:
+                fee = Decimal(str(fee)) if not isinstance(fee, Decimal) else fee
+            except (ValueError, TypeError, InvalidOperation):
+                fee = Decimal(0)
+            return -fee / len(tx['tx_hex']), len(tx['tx_hex']), tx['tx_hex']
+        pending_txs.sort(key=safe_fee)
         
         return_txs = []
         size = 0
@@ -280,7 +300,7 @@ class Database:
             tx_size = len(tx_data['tx_hex'])
             if size + tx_size > limit:
                 break
-            fees.append(Decimal(tx_data['fees']))
+            fees.append(tx_data['fees'])
             size += tx_size
         
         if not fees:
