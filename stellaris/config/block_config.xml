@@ -7,15 +7,15 @@
         <Reward>10000</Reward>
         <MaxDifficulty>5.6</MaxDifficulty>
     </Range>
-    <Range minIndex="previous" maxIndex="50000">
+    <Range minIndex="previous" maxIndex="500000">
         <Reward>10</Reward>
+        <MaxDifficulty>7.1</MaxDifficulty>
+    </Range>
+    <Range minIndex="previous" maxIndex="1000000">
+        <Reward>0.001</Reward>
         <MaxDifficulty>8.6</MaxDifficulty>
     </Range>
-    <Range minIndex="previous" maxIndex="150000">
-        <Reward>0.001</Reward>
-        <MaxDifficulty>10</MaxDifficulty>
-    </Range>
-    <Range minIndex="previous" maxIndex="200000">
+    <Range minIndex="previous" maxIndex="20000000">
         <Reward>0.0001</Reward>
         <MaxDifficulty>10.8</MaxDifficulty>
     </Range>
