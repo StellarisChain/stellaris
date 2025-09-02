@@ -1,31 +1,43 @@
 """
-BPF VM exceptions for secure error handling
+Stellaris Virtual Machine exceptions for secure smart contract execution
 """
 
-class BPFExecutionError(Exception):
-    """Base exception for BPF execution errors"""
+class SVMError(Exception):
+    """Base exception for SVM execution errors"""
     pass
 
-class BPFSecurityError(BPFExecutionError):
-    """Exception for security violations in BPF execution"""
+class SVMSecurityError(SVMError):
+    """Exception for security violations in smart contract execution"""
     pass
 
-class BPFResourceError(BPFExecutionError):
+class SVMResourceError(SVMError):
     """Exception for resource limit violations"""
     pass
 
-class BPFTimeoutError(BPFResourceError):
+class SVMTimeoutError(SVMResourceError):
     """Exception for execution timeout"""
     pass
 
-class BPFMemoryError(BPFResourceError):
+class SVMMemoryError(SVMResourceError):
     """Exception for memory limit violations"""
     pass
 
-class BPFGasError(BPFResourceError):
+class SVMGasError(SVMResourceError):
     """Exception for gas limit violations"""
     pass
 
-class BPFValidationError(BPFExecutionError):
-    """Exception for BPF program validation errors"""
+class SVMValidationError(SVMError):
+    """Exception for smart contract validation errors"""
+    pass
+
+class SVMContractError(SVMError):
+    """Exception for contract-specific errors"""
+    pass
+
+class SVMInvalidCallError(SVMError):
+    """Exception for invalid contract calls"""
+    pass
+
+class SVMInsufficientBalanceError(SVMError):
+    """Exception for insufficient balance operations"""
     pass
