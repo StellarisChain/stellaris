@@ -1,0 +1,464 @@
+"""
+Stellaris Virtual Machine for secure execution of Python smart contracts
+"""
+
+import ast
+import sys
+import time
+import copy
+import threading
+from typing import Dict, Any, Optional, List, Callable, Union
+from decimal import Decimal, getcontext
+from dataclasses import dataclass, field
+from contextlib import contextmanager
+import hashlib
+import json
+
+from stellaris.svm.exceptions import (
+    SVMError, SVMSecurityError, SVMResourceError, 
+    SVMTimeoutError, SVMMemoryError, SVMGasError,
+    SVMValidationError, SVMContractError, SVMInvalidCallError
+)
+
+# Set high precision for Decimal operations
+getcontext().prec = 28
+
+@dataclass
+class ContractState:
+    """Represents the persistent state of a smart contract"""
+    storage: Dict[str, Any] = field(default_factory=dict)
+    balance: Decimal = field(default=Decimal('0'))
+    code: str = ""
+    deployed_by: str = ""
+    deployment_block: int = 0
+
+@dataclass
+class ExecutionContext:
+    """Context for contract execution"""
+    sender: str
+    contract_address: str
+    value: Decimal = field(default=Decimal('0'))
+    gas_limit: int = 100000
+    gas_used: int = 0
+    block_number: int = 0
+    block_timestamp: int = 0
+    transaction_hash: str = ""
+
+@dataclass
+class ContractCall:
+    """Represents a contract method call"""
+    method_name: str
+    args: List[Any]
+    kwargs: Dict[str, Any]
+
+class SecureBuiltins:
+    """Secure built-in functions for smart contracts"""
+    
+    @staticmethod
+    def secure_print(*args, **kwargs):
+        """Secure print that limits output"""
+        output = ' '.join(str(arg) for arg in args)
+        if len(output) > 1000:
+            raise SVMSecurityError("Print output too long")
+        return output
+    
+    @staticmethod
+    def secure_len(obj):
+        """Secure length function"""
+        return len(obj)
+    
+    @staticmethod
+    def secure_str(obj):
+        """Secure string conversion"""
+        result = str(obj)
+        if len(result) > 10000:
+            raise SVMSecurityError("String too long")
+        return result
+    
+    @staticmethod
+    def secure_int(obj):
+        """Secure integer conversion"""
+        return int(obj)
+    
+    @staticmethod
+    def secure_abs(obj):
+        """Secure absolute value"""
+        return abs(obj)
+    
+    @staticmethod
+    def secure_min(*args):
+        """Secure minimum function"""
+        return min(args)
+    
+    @staticmethod
+    def secure_max(*args):
+        """Secure maximum function"""
+        return max(args)
+
+class SmartContract:
+    """Base class for smart contracts"""
+    
+    def __init__(self, vm: 'StellarisVM', address: str):
+        self.vm = vm
+        self.address = address
+        self._exports = {}
+        
+    def export(self, func: Callable) -> Callable:
+        """Decorator to mark functions as contract exports"""
+        self._exports[func.__name__] = func
+        return func
+    
+    def get_storage(self, key: str) -> Any:
+        """Get value from contract storage"""
+        return self.vm.get_contract_storage(self.address, key)
+    
+    def set_storage(self, key: str, value: Any):
+        """Set value in contract storage"""
+        self.vm.set_contract_storage(self.address, key, value)
+    
+    def call_contract(self, address: str, method: str, *args, **kwargs) -> Any:
+        """Call another contract"""
+        return self.vm.call_contract(address, method, *args, **kwargs)
+    
+    def get_balance(self, address: str) -> Decimal:
+        """Get balance of an address"""
+        return self.vm.get_balance(address)
+    
+    def transfer(self, to: str, amount: Decimal):
+        """Transfer tokens from contract to address"""
+        self.vm.transfer(self.address, to, amount)
+
+class StellarisVM:
+    """
+    Stellaris Virtual Machine for executing Python smart contracts
+    """
+    
+    # Execution limits
+    MAX_EXECUTION_TIME = 30.0  # 30 seconds
+    MAX_MEMORY_USAGE = 50 * 1024 * 1024  # 50MB
+    MAX_RECURSION_DEPTH = 100
+    MAX_LOOP_ITERATIONS = 1000000
+    
+    # Gas costs
+    GAS_COSTS = {
+        'base_call': 0.0001,
+        'storage_write': 0.002,
+        'storage_read': 0.001,
+        'memory_word': 0.0003,
+        'computation': 0.0001,
+        'transfer': 0.9,
+        'contract_creation': 1,
+    }
+    
+    def __init__(self):
+        """Initialize the Stellaris VM"""
+        self.contracts: Dict[str, ContractState] = {}
+        self.balances: Dict[str, Decimal] = {}
+        self.execution_context: Optional[ExecutionContext] = None
+        self.call_stack: List[str] = []
+        self.loop_counters: Dict[str, int] = {}
+        
+        # Security restrictions
+        self.allowed_imports = {
+            'decimal', 'datetime', 'hashlib', 'json', 'math', 're'
+        }
+        
+        self.forbidden_calls = {
+            'eval', 'exec', 'compile', '__import__', 'open', 'file',
+            'input', 'raw_input', 'exit', 'quit', 'reload', 'vars',
+            'globals', 'locals', 'dir', 'hasattr', 'getattr', 'setattr',
+            'delattr', '__builtins__'
+        }
+        
+        # Create secure builtins
+        self.secure_builtins = {
+            'print': SecureBuiltins.secure_print,
+            'len': SecureBuiltins.secure_len,
+            'str': SecureBuiltins.secure_str,
+            'int': SecureBuiltins.secure_int,
+            'abs': SecureBuiltins.secure_abs,
+            'min': SecureBuiltins.secure_min,
+            'max': SecureBuiltins.secure_max,
+            'Decimal': Decimal,
+            'True': True,
+            'False': False,
+            'None': None,
+        }
+    
+    def _consume_gas(self, amount: int):
+        """Consume gas for operation"""
+        if not self.execution_context:
+            return
+            
+        self.execution_context.gas_used += amount
+        if self.execution_context.gas_used > self.execution_context.gas_limit:
+            raise SVMGasError(f"Gas limit exceeded: {self.execution_context.gas_used} > {self.execution_context.gas_limit}")
+    
+    def _validate_contract_code(self, code: str) -> bool:
+        """Validate contract code for security"""
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            raise SVMValidationError(f"Syntax error in contract: {e}")
+        
+        # Check for forbidden constructs
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name not in self.allowed_imports:
+                        raise SVMSecurityError(f"Forbidden import: {alias.name}")
+            
+            elif isinstance(node, ast.ImportFrom):
+                if node.module not in self.allowed_imports:
+                    raise SVMSecurityError(f"Forbidden import: {node.module}")
+            
+            elif isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name):
+                    if node.func.id in self.forbidden_calls:
+                        raise SVMSecurityError(f"Forbidden function call: {node.func.id}")
+        
+        return True
+    
+    def deploy_contract(self, code: str, constructor_args: List[Any], 
+                       deployer: str, gas_limit: int = 1000000) -> str:
+        """Deploy a new smart contract"""
+        
+        # Validate code
+        self._validate_contract_code(code)
+        
+        # Generate contract address
+        contract_address = hashlib.sha256(
+            f"{deployer}{time.time()}{code}".encode()
+        ).hexdigest()[:40]
+        
+        # Create execution context
+        context = ExecutionContext(
+            sender=deployer,
+            contract_address=contract_address,
+            gas_limit=gas_limit,
+            block_number=1,  # TODO: Get from blockchain
+            block_timestamp=int(time.time())
+        )
+        
+        self.execution_context = context
+        self._consume_gas(self.GAS_COSTS['contract_creation'])
+        
+        try:
+            # Create contract state
+            contract_state = ContractState(
+                code=code,
+                deployed_by=deployer,
+                deployment_block=context.block_number
+            )
+            
+            self.contracts[contract_address] = contract_state
+            
+            # Execute constructor if present
+            if constructor_args:
+                self._execute_contract_method(contract_address, 'constructor', constructor_args, {})
+            
+            return contract_address
+            
+        finally:
+            self.execution_context = None
+    
+    def call_contract(self, contract_address: str, method_name: str, 
+                     *args, sender: str = None, value: Decimal = None,
+                     gas_limit: int = 100000, **kwargs) -> Any:
+        """Call a contract method"""
+        
+        if contract_address not in self.contracts:
+            raise SVMContractError(f"Contract not found: {contract_address}")
+        
+        # Set up execution context
+        context = ExecutionContext(
+            sender=sender or "0x0",
+            contract_address=contract_address,
+            value=value or Decimal('0'),
+            gas_limit=gas_limit,
+            block_number=1,  # TODO: Get from blockchain
+            block_timestamp=int(time.time())
+        )
+        
+        old_context = self.execution_context
+        self.execution_context = context
+        
+        try:
+            self._consume_gas(self.GAS_COSTS['base_call'])
+            return self._execute_contract_method(contract_address, method_name, args, kwargs)
+        finally:
+            self.execution_context = old_context
+    
+    def _execute_contract_method(self, contract_address: str, method_name: str, 
+                                args: List[Any], kwargs: Dict[str, Any]) -> Any:
+        """Execute a specific contract method"""
+        
+        contract_state = self.contracts[contract_address]
+        
+        # Check recursion depth
+        if len(self.call_stack) >= self.MAX_RECURSION_DEPTH:
+            raise SVMResourceError("Maximum recursion depth exceeded")
+        
+        self.call_stack.append(f"{contract_address}.{method_name}")
+        
+        try:
+            # Create execution environment
+            execution_env = self._create_execution_environment(contract_address)
+            
+            # Execute contract code to get contract instance
+            exec(contract_state.code, execution_env)
+            
+            # Find the contract class (assuming it's the first class defined)
+            contract_class = None
+            for name, obj in execution_env.items():
+                if isinstance(obj, type) and issubclass(obj, SmartContract):
+                    contract_class = obj
+                    break
+            
+            if not contract_class:
+                raise SVMContractError("No contract class found")
+            
+            # Create contract instance
+            contract_instance = contract_class(self, contract_address)
+            
+            # Call the method
+            if method_name not in contract_instance._exports:
+                raise SVMInvalidCallError(f"Method {method_name} not exported")
+            
+            method = contract_instance._exports[method_name]
+            
+            # Execute with timeout
+            start_time = time.time()
+            result = None
+            
+            def execute_method():
+                nonlocal result
+                # Add sender as first argument for compatibility
+                if self.execution_context:
+                    result = method(self.execution_context.sender, *args, **kwargs)
+                else:
+                    result = method(*args, **kwargs)
+            
+            thread = threading.Thread(target=execute_method)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout=self.MAX_EXECUTION_TIME)
+            
+            if thread.is_alive():
+                raise SVMTimeoutError("Contract execution timeout")
+            
+            return result
+            
+        finally:
+            self.call_stack.pop()
+    
+    def _create_execution_environment(self, contract_address: str) -> Dict[str, Any]:
+        """Create secure execution environment for contract"""
+        env = copy.deepcopy(self.secure_builtins)
+        
+        # Add contract-specific globals
+        env.update({
+            'SmartContract': SmartContract,
+            'self': type('ContractSelf', (), {
+                'export': lambda func: self._register_export(contract_address, func),
+                'address': contract_address,
+                'storage': self._create_storage_proxy(contract_address),
+                'balance': self.get_balance(contract_address),
+            })(),
+            'Contract': lambda addr: self._create_contract_proxy(addr),
+        })
+        
+        return env
+    
+    def _register_export(self, contract_address: str, func: Callable) -> Callable:
+        """Register an exported function"""
+        # This is handled by the SmartContract class
+        return func
+    
+    def _create_storage_proxy(self, contract_address: str):
+        """Create a storage proxy for contract state"""
+        class StorageProxy:
+            def __init__(self, vm, address):
+                self.vm = vm
+                self.address = address
+            
+            def get(self, key: str, default=None):
+                return self.vm.get_contract_storage(self.address, key) or default
+            
+            def __getitem__(self, key: str):
+                return self.vm.get_contract_storage(self.address, key)
+            
+            def __setitem__(self, key: str, value: Any):
+                self.vm.set_contract_storage(self.address, key, value)
+            
+            def update(self, data: Dict[str, Any]):
+                for key, value in data.items():
+                    self.vm.set_contract_storage(self.address, key, value)
+        
+        return StorageProxy(self, contract_address)
+    
+    def _create_contract_proxy(self, contract_address: str):
+        """Create a proxy to call other contracts"""
+        class ContractProxy:
+            def __init__(self, vm, address):
+                self.vm = vm
+                self.address = address
+            
+            def __getattr__(self, method_name: str):
+                def call_method(*args, **kwargs):
+                    return self.vm.call_contract(self.address, method_name, *args, **kwargs)
+                return call_method
+        
+        return ContractProxy(self, contract_address)
+    
+    def get_contract_storage(self, contract_address: str, key: str) -> Any:
+        """Get value from contract storage"""
+        if contract_address not in self.contracts:
+            return None
+        
+        self._consume_gas(self.GAS_COSTS['storage_read'])
+        return self.contracts[contract_address].storage.get(key)
+    
+    def set_contract_storage(self, contract_address: str, key: str, value: Any):
+        """Set value in contract storage"""
+        if contract_address not in self.contracts:
+            raise SVMContractError(f"Contract not found: {contract_address}")
+        
+        self._consume_gas(self.GAS_COSTS['storage_write'])
+        self.contracts[contract_address].storage[key] = value
+    
+    def get_balance(self, address: str) -> Decimal:
+        """Get balance of an address"""
+        return self.balances.get(address, Decimal('0'))
+    
+    def set_balance(self, address: str, amount: Decimal):
+        """Set balance of an address"""
+        self.balances[address] = amount
+    
+    def transfer(self, from_addr: str, to_addr: str, amount: Decimal):
+        """Transfer tokens between addresses"""
+        if amount <= 0:
+            raise SVMContractError("Transfer amount must be positive")
+        
+        from_balance = self.get_balance(from_addr)
+        if from_balance < amount:
+            raise SVMContractError(f"Insufficient balance: {from_balance} < {amount}")
+        
+        self._consume_gas(self.GAS_COSTS['transfer'])
+        
+        self.set_balance(from_addr, from_balance - amount)
+        self.set_balance(to_addr, self.get_balance(to_addr) + amount)
+    
+    def get_contract_info(self, contract_address: str) -> Optional[Dict[str, Any]]:
+        """Get contract information"""
+        if contract_address not in self.contracts:
+            return None
+        
+        contract = self.contracts[contract_address]
+        return {
+            'address': contract_address,
+            'deployed_by': contract.deployed_by,
+            'deployment_block': contract.deployment_block,
+            'balance': contract.balance,
+            'storage_keys': list(contract.storage.keys())
+        }
