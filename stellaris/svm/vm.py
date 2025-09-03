@@ -150,24 +150,30 @@ class StellarisVM:
         'contract_creation': 1,
     }
     
-    def __init__(self):
-        """Initialize the Stellaris VM"""
+    def __init__(self, blockchain_interface=None):
+        """
+        Initialize the Stellaris VM
+        
+        Args:
+            blockchain_interface: Interface to blockchain for getting block data
+        """
         self.contracts: Dict[str, ContractState] = {}
         self.balances: Dict[str, Decimal] = {}
         self.execution_context: Optional[ExecutionContext] = None
         self.call_stack: List[str] = []
         self.loop_counters: Dict[str, int] = {}
+        self.blockchain_interface = blockchain_interface
         
         # Security restrictions
         self.allowed_imports = {
-            'decimal', 'datetime', 'hashlib', 'json', 'math', 're'
+            'decimal', 'datetime', 'hashlib', 'json', 'math', 're', 'typing', 'time',
+            'dataclasses', 'stellaris.svm.vm', 'stellaris.svm.exceptions', 'sys', 'os'
         }
         
         self.forbidden_calls = {
-            'eval', 'exec', 'compile', '__import__', 'open', 'file',
+            'eval', 'exec', 'compile', 'open', 'file',
             'input', 'raw_input', 'exit', 'quit', 'reload', 'vars',
-            'globals', 'locals', 'dir', 'hasattr', 'getattr', 'setattr',
-            'delattr', '__builtins__'
+            'globals', 'locals', 'dir', 'delattr', '__builtins__'
         }
         
         # Create secure builtins
@@ -179,11 +185,77 @@ class StellarisVM:
             'abs': SecureBuiltins.secure_abs,
             'min': SecureBuiltins.secure_min,
             'max': SecureBuiltins.secure_max,
+            'getattr': getattr,
+            'hasattr': hasattr,
+            'setattr': setattr,
+            'isinstance': isinstance,
+            '__import__': self._secure_import,
+            '__build_class__': __build_class__,
+            'super': super,
+            'type': type,
+            'object': object,
+            'property': property,
+            'staticmethod': staticmethod,
+            'classmethod': classmethod,
+            'bool': bool,
+            'float': float,
+            'list': list,
+            'dict': dict,
+            'tuple': tuple,
+            'set': set,
+            'frozenset': frozenset,
+            'range': range,
+            'enumerate': enumerate,
+            'zip': zip,
+            'sorted': sorted,
+            'reversed': reversed,
+            'all': all,
+            'any': any,
+            'sum': sum,
+            'Exception': Exception,
+            'ValueError': ValueError,
+            'TypeError': TypeError,
+            'KeyError': KeyError,
+            'AttributeError': AttributeError,
+            'IndexError': IndexError,
             'Decimal': Decimal,
             'True': True,
             'False': False,
             'None': None,
         }
+    
+    def get_current_block_number(self) -> int:
+        """Get current block number from blockchain interface"""
+        if self.blockchain_interface and hasattr(self.blockchain_interface, 'get_current_block_number'):
+            return self.blockchain_interface.get_current_block_number()
+        return 1  # Default fallback
+    
+    def get_current_block_timestamp(self) -> int:
+        """Get current block timestamp from blockchain interface"""
+        if self.blockchain_interface and hasattr(self.blockchain_interface, 'get_current_block_timestamp'):
+            return self.blockchain_interface.get_current_block_timestamp()
+        return int(time.time())  # Default fallback
+    
+    def get_transaction_hash(self) -> str:
+        """Get current transaction hash from blockchain interface"""
+        if self.blockchain_interface and hasattr(self.blockchain_interface, 'get_current_transaction_hash'):
+            return self.blockchain_interface.get_current_transaction_hash()
+        return f"tx_{int(time.time())}_{hash(str(time.time()))}"  # Default fallback
+    
+    def _secure_import(self, name, globals=None, locals=None, fromlist=(), level=0):
+        """Secure import function that only allows whitelisted modules"""
+        if name not in self.allowed_imports:
+            raise SVMSecurityError(f"Import not allowed: {name}")
+        
+        # Handle special cases for our VM modules
+        if name == 'stellaris.svm.vm':
+            # Return a module-like object with SmartContract
+            class VMModule:
+                SmartContract = SmartContract
+            return VMModule()
+        
+        # For other allowed imports, use the real import
+        return __import__(name, globals, locals, fromlist, level)
     
     def _consume_gas(self, amount: int):
         """Consume gas for operation"""
@@ -236,8 +308,9 @@ class StellarisVM:
             sender=deployer,
             contract_address=contract_address,
             gas_limit=gas_limit,
-            block_number=1,  # TODO: Get from blockchain
-            block_timestamp=int(time.time())
+            block_number=self.get_current_block_number(),
+            block_timestamp=self.get_current_block_timestamp(),
+            transaction_hash=self.get_transaction_hash()
         )
         
         self.execution_context = context
@@ -253,9 +326,32 @@ class StellarisVM:
             
             self.contracts[contract_address] = contract_state
             
-            # Execute constructor if present
-            if constructor_args:
-                self._execute_contract_method(contract_address, 'constructor', constructor_args, {})
+            # Create and initialize contract instance first
+            execution_env = self._create_execution_environment(contract_address)
+            exec(contract_state.code, execution_env)
+            
+            # Find the contract class
+            contract_class = None
+            for name, obj in execution_env.items():
+                if isinstance(obj, type) and issubclass(obj, SmartContract):
+                    contract_class = obj
+                    break
+            
+            if not contract_class:
+                raise SVMContractError("No contract class found")
+            
+            # Create contract instance (this runs __init__ and registers exports)
+            contract_instance = contract_class(self, contract_address)
+            
+            # Store the contract instance for later use
+            contract_state.instance = contract_instance
+            
+            # Execute constructor if present and arguments provided
+            if constructor_args and hasattr(contract_instance, 'constructor'):
+                if self.execution_context:
+                    contract_instance.constructor(self.execution_context.sender, *constructor_args)
+                else:
+                    contract_instance.constructor(*constructor_args)
             
             return contract_address
             
@@ -276,8 +372,9 @@ class StellarisVM:
             contract_address=contract_address,
             value=value or Decimal('0'),
             gas_limit=gas_limit,
-            block_number=1,  # TODO: Get from blockchain
-            block_timestamp=int(time.time())
+            block_number=self.get_current_block_number(),
+            block_timestamp=self.get_current_block_timestamp(),
+            transaction_hash=self.get_transaction_hash()
         )
         
         old_context = self.execution_context
@@ -302,30 +399,41 @@ class StellarisVM:
         self.call_stack.append(f"{contract_address}.{method_name}")
         
         try:
-            # Create execution environment
-            execution_env = self._create_execution_environment(contract_address)
+            # Use stored contract instance if available, otherwise create new one
+            if hasattr(contract_state, 'instance') and contract_state.instance:
+                contract_instance = contract_state.instance
+            else:
+                # Fallback: create new instance
+                execution_env = self._create_execution_environment(contract_address)
+                exec(contract_state.code, execution_env)
+                
+                contract_class = None
+                for name, obj in execution_env.items():
+                    if isinstance(obj, type) and issubclass(obj, SmartContract):
+                        contract_class = obj
+                        break
+                
+                if not contract_class:
+                    raise SVMContractError("No contract class found")
+                
+                contract_instance = contract_class(self, contract_address)
             
-            # Execute contract code to get contract instance
-            exec(contract_state.code, execution_env)
-            
-            # Find the contract class (assuming it's the first class defined)
-            contract_class = None
-            for name, obj in execution_env.items():
-                if isinstance(obj, type) and issubclass(obj, SmartContract):
-                    contract_class = obj
-                    break
-            
-            if not contract_class:
-                raise SVMContractError("No contract class found")
-            
-            # Create contract instance
-            contract_instance = contract_class(self, contract_address)
-            
-            # Call the method
-            if method_name not in contract_instance._exports:
-                raise SVMInvalidCallError(f"Method {method_name} not exported")
-            
-            method = contract_instance._exports[method_name]
+            # Special handling for constructor
+            if method_name == 'constructor':
+                if hasattr(contract_instance, 'constructor'):
+                    method = contract_instance.constructor
+                else:
+                    # No constructor defined, just return
+                    return True
+            else:
+                # Call the method
+                if method_name not in contract_instance._exports:
+                    available_methods = list(contract_instance._exports.keys())
+                    raise SVMInvalidCallError(
+                        f"Method {method_name} not exported", 
+                        available_methods=available_methods
+                    )
+                method = contract_instance._exports[method_name]
             
             # Execute with timeout
             start_time = time.time()
@@ -359,6 +467,9 @@ class StellarisVM:
         # Add contract-specific globals
         env.update({
             'SmartContract': SmartContract,
+            '__name__': '__main__',
+            '__file__': f'<contract:{contract_address}>',
+            '__builtins__': self.secure_builtins,
             'self': type('ContractSelf', (), {
                 'export': lambda func: self._register_export(contract_address, func),
                 'address': contract_address,
