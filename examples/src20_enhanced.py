@@ -10,13 +10,6 @@ from typing import Dict, Optional, List
 import hashlib
 import json
 import time
-import sys
-import os
-
-# Add the stellaris package to path if needed
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from stellaris.svm.vm import SmartContract
 
 class SRC20Token(SmartContract):
     """
@@ -44,11 +37,32 @@ class SRC20Token(SmartContract):
             self.set_storage('paused', False)
             self.set_storage('blacklist', {})
             self.set_storage('events', [])
-    
-    def export(self, func):
-        """Decorator to mark functions as contract exports"""
-        self._exports[func.__name__] = func
-        return func
+        
+        # Register exported methods
+        self.export(self.constructor)
+        self.export(self.name)
+        self.export(self.symbol)
+        self.export(self.decimals)
+        self.export(self.total_supply)
+        self.export(self.balance_of)
+        self.export(self.allowance)
+        self.export(self.transfer)
+        self.export(self.approve)
+        self.export(self.transfer_from)
+        self.export(self.mint)
+        self.export(self.burn)
+        self.export(self.pause)
+        self.export(self.unpause)
+        self.export(self.is_paused)
+        self.export(self.add_minter)
+        self.export(self.remove_minter)
+        self.export(self.is_minter)
+        self.export(self.blacklist)
+        self.export(self.unblacklist)
+        self.export(self.is_blacklisted)
+        self.export(self.transfer_ownership)
+        self.export(self.get_events)
+        self.export(self.get_info)
 
     def constructor(self, sender: str, name: str, symbol: str, decimals: int = 18, 
                    max_supply: Optional[Decimal] = None):
@@ -98,40 +112,33 @@ class SRC20Token(SmartContract):
             'max_supply': str(max_supply) if max_supply else None
         })
     
-    @self.export
     def name(self, sender: str) -> str:
         """Get token name"""
         return self.get_storage('name') or ""
     
-    @self.export
     def symbol(self, sender: str) -> str:
         """Get token symbol"""
         return self.get_storage('symbol') or ""
     
-    @self.export
     def decimals(self, sender: str) -> int:
         """Get token decimals"""
         return self.get_storage('decimals') or 18
     
-    @self.export
     def total_supply(self, sender: str) -> Decimal:
         """Get total token supply"""
         return self.get_storage('total_supply') or Decimal('0')
     
-    @self.export
     def balance_of(self, sender: str, account: str) -> Decimal:
         """Get balance of an account"""
         balances = self.get_storage('balances') or {}
         return balances.get(account, Decimal('0'))
     
-    @self.export
     def allowance(self, sender: str, owner: str, spender: str) -> Decimal:
         """Get allowance amount"""
         allowances = self.get_storage('allowances') or {}
         owner_allowances = allowances.get(owner, {})
         return owner_allowances.get(spender, Decimal('0'))
     
-    @self.export
     def transfer(self, sender: str, to: str, amount: Decimal) -> bool:
         """
         Transfer tokens from sender to recipient
@@ -174,7 +181,6 @@ class SRC20Token(SmartContract):
         
         return True
     
-    @self.export
     def approve(self, sender: str, spender: str, amount: Decimal) -> bool:
         """
         Approve spender to spend tokens on behalf of sender
@@ -213,7 +219,6 @@ class SRC20Token(SmartContract):
         
         return True
     
-    @self.export
     def transfer_from(self, sender: str, from_addr: str, to: str, amount: Decimal) -> bool:
         """
         Transfer tokens from one address to another using allowance
@@ -269,7 +274,6 @@ class SRC20Token(SmartContract):
         
         return True
     
-    @self.export
     def mint(self, sender: str, to: str, amount: Decimal) -> bool:
         """
         Mint new tokens (only minters)
@@ -318,7 +322,6 @@ class SRC20Token(SmartContract):
         
         return True
     
-    @self.export
     def burn(self, sender: str, amount: Decimal) -> bool:
         """
         Burn tokens from sender's balance
@@ -363,7 +366,6 @@ class SRC20Token(SmartContract):
         
         return True
     
-    @self.export
     def pause(self, sender: str):
         """Pause all token operations (only owner)"""
         self._require_owner(sender)
@@ -371,7 +373,6 @@ class SRC20Token(SmartContract):
         
         self._emit_event('Paused', {'by': sender})
     
-    @self.export
     def unpause(self, sender: str):
         """Unpause token operations (only owner)"""
         self._require_owner(sender)
@@ -379,12 +380,10 @@ class SRC20Token(SmartContract):
         
         self._emit_event('Unpaused', {'by': sender})
     
-    @self.export
     def is_paused(self, sender: str) -> bool:
         """Check if contract is paused"""
         return self.get_storage('paused') or False
     
-    @self.export
     def add_minter(self, sender: str, minter: str):
         """Add a new minter (only owner)"""
         self._require_owner(sender)
@@ -395,7 +394,6 @@ class SRC20Token(SmartContract):
         
         self._emit_event('MinterAdded', {'minter': minter, 'by': sender})
     
-    @self.export
     def remove_minter(self, sender: str, minter: str):
         """Remove a minter (only owner)"""
         self._require_owner(sender)
@@ -407,13 +405,11 @@ class SRC20Token(SmartContract):
         
         self._emit_event('MinterRemoved', {'minter': minter, 'by': sender})
     
-    @self.export
     def is_minter(self, sender: str, account: str) -> bool:
         """Check if account is a minter"""
         minters = self.get_storage('minters') or {}
         return minters.get(account, False)
     
-    @self.export
     def blacklist(self, sender: str, account: str):
         """Blacklist an account (only owner)"""
         self._require_owner(sender)
@@ -424,7 +420,6 @@ class SRC20Token(SmartContract):
         
         self._emit_event('Blacklisted', {'account': account, 'by': sender})
     
-    @self.export
     def unblacklist(self, sender: str, account: str):
         """Remove account from blacklist (only owner)"""
         self._require_owner(sender)
@@ -436,13 +431,11 @@ class SRC20Token(SmartContract):
         
         self._emit_event('Unblacklisted', {'account': account, 'by': sender})
     
-    @self.export
     def is_blacklisted(self, sender: str, account: str) -> bool:
         """Check if account is blacklisted"""
         blacklisted = self.get_storage('blacklist') or {}
         return blacklisted.get(account, False)
     
-    @self.export
     def transfer_ownership(self, sender: str, new_owner: str):
         """Transfer contract ownership (only current owner)"""
         self._require_owner(sender)
@@ -465,7 +458,6 @@ class SRC20Token(SmartContract):
             'new_owner': new_owner
         })
     
-    @self.export
     def get_events(self, sender: str, event_type: Optional[str] = None) -> List[Dict]:
         """Get contract events"""
         events = self.get_storage('events') or []
@@ -475,7 +467,6 @@ class SRC20Token(SmartContract):
         
         return events
     
-    @self.export
     def get_info(self, sender: str) -> Dict:
         """Get comprehensive token information"""
         return {
@@ -517,12 +508,17 @@ class SRC20Token(SmartContract):
         """Emit an event by storing it in contract storage"""
         events = self.get_storage('events') or []
         
+        # Get context from VM if available
+        context = getattr(self.vm, 'execution_context', None)
+        block_number = context.block_number if context else 1
+        transaction_hash = context.transaction_hash if context and context.transaction_hash else f"tx_{int(time.time())}"
+        
         event = {
             'type': event_type,
             'data': data,
-            'block_number': 1,  # TODO: Get from blockchain context
+            'block_number': block_number,
             'timestamp': int(time.time()),
-            'transaction_hash': 'mock_hash'  # TODO: Get from execution context
+            'transaction_hash': transaction_hash
         }
         
         events.append(event)

@@ -14,6 +14,8 @@ from contextlib import contextmanager
 import hashlib
 import json
 
+from p2pd import Dec
+
 from stellaris.svm.exceptions import (
     SVMError, SVMSecurityError, SVMResourceError, 
     SVMTimeoutError, SVMMemoryError, SVMGasError,
@@ -103,6 +105,13 @@ class SmartContract:
         self.address = address
         self._exports = {}
         
+        # Auto-register methods that don't start with underscore and aren't constructor
+        for name in dir(self):
+            if not name.startswith('_') and name != 'constructor':
+                attr = getattr(self, name)
+                if callable(attr) and not name in ['vm', 'address', 'export', 'get_storage', 'set_storage', 'call_contract', 'get_balance', 'transfer']:
+                    self._exports[name] = attr
+        
     def export(self, func: Callable) -> Callable:
         """Decorator to mark functions as contract exports"""
         self._exports[func.__name__] = func
@@ -140,7 +149,7 @@ class StellarisVM:
     MAX_LOOP_ITERATIONS = 1000000
     
     # Gas costs
-    GAS_COSTS = {
+    GAS_COSTS: dict[str, float | Decimal] = {
         'base_call': 0.0001,
         'storage_write': 0.002,
         'storage_read': 0.001,
@@ -149,6 +158,11 @@ class StellarisVM:
         'transfer': 0.9,
         'contract_creation': 1,
     }
+    
+    # Gas constants
+    MAX_GAS_LIMIT = 10_000_000
+    BASE_GAS = 1
+    GAS_PRICE = Decimal('0.000001')
     
     def __init__(self, blockchain_interface=None):
         """
@@ -227,13 +241,33 @@ class StellarisVM:
     def get_current_block_number(self) -> int:
         """Get current block number from blockchain interface"""
         if self.blockchain_interface and hasattr(self.blockchain_interface, 'get_current_block_number'):
-            return self.blockchain_interface.get_current_block_number()
+            # Use asyncio to run the async method if we're in an async context
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # We're in an async context, but need to handle this sync call
+                    # For now, return a cached value or default
+                    return getattr(self.blockchain_interface, '_cached_block_number', 1)
+                else:
+                    return loop.run_until_complete(self.blockchain_interface.get_current_block_number())
+            except RuntimeError:
+                # No event loop, return cached or default
+                return getattr(self.blockchain_interface, '_cached_block_number', 1)
         return 1  # Default fallback
     
     def get_current_block_timestamp(self) -> int:
         """Get current block timestamp from blockchain interface"""
         if self.blockchain_interface and hasattr(self.blockchain_interface, 'get_current_block_timestamp'):
-            return self.blockchain_interface.get_current_block_timestamp()
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    return getattr(self.blockchain_interface, '_cached_block_timestamp', int(time.time()))
+                else:
+                    return loop.run_until_complete(self.blockchain_interface.get_current_block_timestamp())
+            except RuntimeError:
+                return getattr(self.blockchain_interface, '_cached_block_timestamp', int(time.time()))
         return int(time.time())  # Default fallback
     
     def get_transaction_hash(self) -> str:
@@ -343,15 +377,30 @@ class StellarisVM:
             # Create contract instance (this runs __init__ and registers exports)
             contract_instance = contract_class(self, contract_address)
             
+            # Transfer pending exports from contract context to instance
+            if 'self' in execution_env and hasattr(execution_env['self'], '_pending_exports'):
+                for method_name, method_func in execution_env['self']._pending_exports.items():
+                    # Bind the method to the contract instance
+                    bound_method = method_func.__get__(contract_instance, contract_class)
+                    contract_instance._exports[method_name] = bound_method
+            
             # Store the contract instance for later use
             contract_state.instance = contract_instance
             
             # Execute constructor if present and arguments provided
-            if constructor_args and hasattr(contract_instance, 'constructor'):
-                if self.execution_context:
-                    contract_instance.constructor(self.execution_context.sender, *constructor_args)
-                else:
-                    contract_instance.constructor(*constructor_args)
+            if constructor_args and 'constructor' in contract_instance._exports:
+                # Make sure execution context is available
+                if not self.execution_context:
+                    self.execution_context = ExecutionContext(
+                        sender=deployer,
+                        contract_address=contract_address,
+                        gas_limit=gas_limit,
+                        block_number=self.get_current_block_number(),
+                        block_timestamp=self.get_current_block_timestamp(),
+                        transaction_hash=self.get_transaction_hash()
+                    )
+                # Call constructor with sender as first argument (like regular method calls)
+                contract_instance._exports['constructor'](self.execution_context.sender, *constructor_args)
             
             return contract_address
             
@@ -377,7 +426,7 @@ class StellarisVM:
             transaction_hash=self.get_transaction_hash()
         )
         
-        old_context = self.execution_context
+        old_context: ExecutionContext | None = self.execution_context
         self.execution_context = context
         
         try:
@@ -464,18 +513,37 @@ class StellarisVM:
         """Create secure execution environment for contract"""
         env = copy.deepcopy(self.secure_builtins)
         
-        # Add contract-specific globals
+        # Create contract context object that will be available as 'self' during class definition
+        class ContractContext:
+            def __init__(self, vm_instance, contract_addr):
+                self.vm = vm_instance
+                self.address = contract_addr
+                self.storage = vm_instance._create_storage_proxy(contract_addr)
+                self.balance = vm_instance.get_balance(contract_addr)
+                self._pending_exports = {}  # Store exports until contract instance is created
+            
+            def export(self, func):
+                """Decorator to mark methods as exported"""
+                self._pending_exports[func.__name__] = func
+                return func
+            
+            def set_storage(self, key, value):
+                """Proxy for storage operations during contract definition"""
+                return self.vm.set_contract_storage(self.address, key, value)
+            
+            def get_storage(self, key, default=None):
+                """Proxy for storage operations during contract definition"""
+                return self.vm.get_contract_storage(self.address, key) or default
+        
+        # Create the context instance
+        contract_context = ContractContext(self, contract_address)
+        
         env.update({
             'SmartContract': SmartContract,
             '__name__': '__main__',
             '__file__': f'<contract:{contract_address}>',
             '__builtins__': self.secure_builtins,
-            'self': type('ContractSelf', (), {
-                'export': lambda func: self._register_export(contract_address, func),
-                'address': contract_address,
-                'storage': self._create_storage_proxy(contract_address),
-                'balance': self.get_balance(contract_address),
-            })(),
+            'self': contract_context,  # This makes @self.export work
             'Contract': lambda addr: self._create_contract_proxy(addr),
         })
         
