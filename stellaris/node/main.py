@@ -28,10 +28,24 @@ from stellaris.manager import create_block, get_difficulty, Manager, get_transac
     split_block_content, calculate_difficulty, clear_pending_transactions, block_to_bytes, get_transactions_merkle_tree_ordered
 from stellaris.node.nodes_manager import NodesManager, NodeInterface
 from stellaris.node.utils import ip_is_local
-from stellaris.transactions import Transaction, CoinbaseTransaction
+from stellaris.transactions import Transaction, CoinbaseTransaction, SmartContractTransaction
 from stellaris.database import Database
 from stellaris.constants import VERSION, ENDIAN
 from typing import List, Dict, Optional
+
+# Smart Contract imports
+try:
+    from stellaris.svm.vm_manager import StellarisVMManager, ExecutionResult
+    from stellaris.svm.vm import StellarisVM
+    from stellaris.svm.exceptions import SVMError, SVMContractError
+    VM_AVAILABLE = True
+except ImportError:
+    # VM components not available
+    StellarisVMManager = None
+    ExecutionResult = None
+    SVMError = Exception
+    SVMContractError = Exception
+    VM_AVAILABLE = False
 
 
 limiter = Limiter(key_func=get_remote_address)
@@ -43,6 +57,9 @@ NodesManager.init()
 started = False
 is_syncing = False
 self_url = None
+vm_manager = None  # Will be StellarisVMManager when initialized
+# Initialize VM Manager (will be set when database is ready)
+vm_manager: StellarisVMManager = None
 
 #print = ic
 
@@ -210,6 +227,9 @@ async def startup():
         database=config['STELLARIS_DATABASE_NAME'] if 'STELLARIS_DATABASE_NAME' in config else "stellaris",
         host=config['STELLARIS_DATABASE_HOST'] if 'STELLARIS_DATABASE_HOST' in config else None
     )
+    
+    # Initialize VM Manager after database is ready
+    await initialize_vm_manager()
 
 
 @app.get("/")
@@ -508,6 +528,376 @@ async def get_blocks(request: Request, offset: int, limit: int = Query(default=.
     blocks = await db.get_blocks(offset, limit)
     result = {'ok': True, 'result': blocks}
     return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+
+
+# ==================== SMART CONTRACT ENDPOINTS ====================
+
+@app.post("/deploy_contract")
+@limiter.limit("5/minute")
+async def deploy_contract(request: Request, data: dict = Body(...)):
+    """Deploy a smart contract from hex transaction"""
+    global vm_manager
+    
+    if not VM_AVAILABLE:
+        return {'ok': False, 'error': 'Smart contract functionality not available'}
+    
+    if not vm_manager:
+        return {'ok': False, 'error': 'VM Manager not initialized'}
+    
+    try:
+        # Extract transaction hex
+        tx_hex = data.get('transaction_hex')
+        if not tx_hex:
+            return {'ok': False, 'error': 'transaction_hex is required'}
+        
+        # Validate hex format
+        try:
+            # Remove 0x prefix if present for validation
+            clean_hex = tx_hex[2:] if tx_hex.startswith('0x') else tx_hex
+            bytes.fromhex(clean_hex)
+        except ValueError:
+            return {'ok': False, 'error': 'Invalid hex format'}
+        
+        # Parse the smart contract transaction
+        try:
+            sc_transaction = await SmartContractTransaction.from_hex(tx_hex)
+        except Exception as e:
+            return {'ok': False, 'error': f'Invalid transaction format: {str(e)}'}
+        
+        # Validate it's a deployment transaction
+        if not sc_transaction.is_deployment():
+            return {'ok': False, 'error': 'Transaction is not a contract deployment'}
+        
+        # Get sender from transaction inputs
+        if not sc_transaction.inputs:
+            return {'ok': False, 'error': 'Transaction must have inputs to determine sender'}
+        
+        sender = sc_transaction.inputs[0].get_address()
+        
+        # Validate gas limit
+        if sc_transaction.gas_limit <= 0:
+            return {'ok': False, 'error': 'Gas limit must be positive'}
+        
+        if sc_transaction.gas_limit > StellarisVM.MAX_GAS_LIMIT:  # 10M gas limit
+            return {'ok': False, 'error': f'Gas limit too high (max: {StellarisVM.MAX_GAS_LIMIT})'}
+        
+        # Execute deployment
+        result = await vm_manager.deploy_contract(sc_transaction, sender)
+        
+        if result.success:
+            # Calculate transaction hash
+            tx_hash = sc_transaction.hash()
+            
+            # Add transaction to pending pool
+            await db.add_pending_transaction(tx_hex)
+            
+            # Calculate gas fee
+            gas_fee = sc_transaction.calculate_gas_fee()
+            
+            return {
+                'ok': True,
+                'result': {
+                    'contract_address': result.result,
+                    'gas_used': result.gas_used,
+                    'gas_fee': str(gas_fee),
+                    'transaction_hash': tx_hash,
+                    'status': 'pending',
+                    'block_number': None  # Will be set when mined
+                }
+            }
+        else:
+            return {
+                'ok': False,
+                'error': result.error,
+                'gas_used': result.gas_used
+            }
+            
+    except Exception as e:
+        return {'ok': False, 'error': f'Internal server error: {str(e)}'}
+
+
+@app.post("/call_contract")
+@limiter.limit("10/minute")
+async def call_contract(request: Request, data: dict = Body(...)):
+    """Call a smart contract method from hex transaction"""
+    global vm_manager
+    
+    if not VM_AVAILABLE:
+        return {'ok': False, 'error': 'Smart contract functionality not available'}
+    
+    if not vm_manager:
+        return {'ok': False, 'error': 'VM Manager not initialized'}
+    
+    try:
+        # Extract transaction hex
+        tx_hex = data.get('transaction_hex')
+        if not tx_hex:
+            return {'ok': False, 'error': 'transaction_hex is required'}
+        
+        # Validate hex format
+        try:
+            # Remove 0x prefix if present for validation
+            clean_hex = tx_hex[2:] if tx_hex.startswith('0x') else tx_hex
+            bytes.fromhex(clean_hex)
+        except ValueError:
+            return {'ok': False, 'error': 'Invalid hex format'}
+        
+        # Parse the smart contract transaction
+        try:
+            sc_transaction = await SmartContractTransaction.from_hex(tx_hex)
+        except Exception as e:
+            return {'ok': False, 'error': f'Invalid transaction format: {str(e)}'}
+        
+        # Validate it's a call transaction
+        if not sc_transaction.is_call():
+            return {'ok': False, 'error': 'Transaction is not a contract call'}
+        
+        # Get sender from transaction inputs
+        if not sc_transaction.inputs:
+            return {'ok': False, 'error': 'Transaction must have inputs to determine sender'}
+        
+        sender = sc_transaction.inputs[0].get_address()
+        
+        # Validate gas limit
+        if sc_transaction.gas_limit <= 0:
+            return {'ok': False, 'error': 'Gas limit must be positive'}
+        
+        # Validate contract exists
+        contract_exists = await db.contract_exists(sc_transaction.contract_address)
+        if not contract_exists:
+            return {'ok': False, 'error': f'Contract not found at address {sc_transaction.contract_address}'}
+        
+        # Execute call
+        result = await vm_manager.call_contract(sc_transaction, sender)
+        
+        if result.success:
+            # Calculate transaction hash
+            tx_hash = sc_transaction.hash()
+            
+            # Add transaction to pending pool
+            await db.add_pending_transaction(tx_hex)
+            
+            # Calculate gas fee
+            gas_fee = sc_transaction.calculate_gas_fee()
+            
+            return {
+                'ok': True,
+                'result': {
+                    'return_value': result.result,
+                    'gas_used': result.gas_used,
+                    'gas_fee': str(gas_fee),
+                    'transaction_hash': tx_hash,
+                    'status': 'pending',
+                    'block_number': None  # Will be set when mined
+                }
+            }
+        else:
+            return {
+                'ok': False,
+                'error': result.error,
+                'gas_used': result.gas_used
+            }
+            
+    except Exception as e:
+        return {'ok': False, 'error': f'Internal server error: {str(e)}'}
+
+
+@app.get("/get_contract_info")
+@limiter.limit("20/minute")
+async def get_contract_info(request: Request, contract_address: str, pretty: bool = False):
+    """Get contract information"""
+    global vm_manager
+    
+    if not vm_manager:
+        result = {'ok': False, 'error': 'VM Manager not initialized'}
+    else:
+        try:
+            contract_info = await vm_manager.get_contract_info(contract_address)
+            if contract_info:
+                result = {'ok': True, 'result': contract_info}
+            else:
+                result = {'ok': False, 'error': 'Contract not found'}
+        except Exception as e:
+            result = {'ok': False, 'error': str(e)}
+    
+    return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+
+
+@app.post("/estimate_gas")
+@limiter.limit("30/minute")
+async def estimate_gas(request: Request):
+    """Estimate gas for contract operation"""
+    global vm_manager
+    
+    if not VM_AVAILABLE:
+        return {'success': False, 'error': 'Smart contract functionality not available'}
+    elif not vm_manager:
+        return {'success': False, 'error': 'VM Manager not initialized'}
+    
+    try:
+        # Parse request body
+        body = await request.json()
+        transaction_hex = body.get('transaction_hex')
+        
+        if not transaction_hex:
+            return {'success': False, 'error': 'transaction_hex required'}
+        
+        # Parse transaction from hex
+        from stellaris.transactions.smart_contract_transaction import SmartContractTransaction
+        transaction = await SmartContractTransaction.from_hex(transaction_hex)
+        
+        # Estimate gas based on transaction type
+        if transaction.is_deployment():
+            # Deployment estimation
+            code_size = len(transaction.contract_code.encode('utf-8'))
+            base_gas = 21000  # Base transaction cost
+            deployment_gas = 32000  # Base deployment cost
+            code_gas = code_size * 200  # Per byte cost
+            estimated_gas = base_gas + deployment_gas + code_gas
+            
+            operation_type = "deployment"
+        elif transaction.is_call():
+            # Call estimation
+            base_gas = 21000  # Base transaction cost
+            call_gas = 9000   # Base call cost
+            estimated_gas = base_gas + call_gas
+            
+            operation_type = "call"
+        else:
+            return {'success': False, 'error': 'Invalid transaction type'}
+        
+        # Ensure estimated gas doesn't exceed the transaction's gas limit
+        final_estimate = min(estimated_gas, transaction.gas_limit)
+        
+        return {
+            'success': True,
+            'gas_estimate': final_estimate,
+            'gas_limit': transaction.gas_limit,
+            'operation_type': operation_type
+        }
+        
+    except Exception as e:
+        return {'success': False, 'error': f'Gas estimation failed: {str(e)}'}
+
+
+@app.get("/get_vm_stats")
+@limiter.limit("10/minute")
+async def get_vm_stats(request: Request, pretty: bool = False):
+    """Get VM pool statistics"""
+    global vm_manager
+    
+    if not VM_AVAILABLE:
+        result = {'ok': False, 'error': 'Smart contract functionality not available'}
+    elif not vm_manager:
+        result = {'ok': False, 'error': 'VM Manager not initialized'}
+    else:
+        try:
+            stats = vm_manager.get_stats()
+            
+            # Calculate additional metrics
+            total_contracts = len(await db.get_all_contracts()) if hasattr(db, 'get_all_contracts') else 0
+            
+            result = {
+                'ok': True,
+                'result': {
+                    'vm_pool': {
+                        'total_vms': stats.total_vms,
+                        'active_vms': stats.active_vms,
+                        'available_vms': stats.total_vms - stats.active_vms
+                    },
+                    'execution_stats': {
+                        'total_executions': stats.total_executions,
+                        'pending_executions': stats.pending_executions,
+                        'avg_execution_time': round(stats.avg_execution_time, 4),
+                        'total_gas_used': stats.total_gas_used
+                    },
+                    'blockchain_stats': {
+                        'total_contracts': total_contracts,
+                        'vm_enabled': True
+                    }
+                }
+            }
+        except Exception as e:
+            result = {'ok': False, 'error': f'Internal server error: {str(e)}'}
+    
+    return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+
+
+@app.get("/get_gas_price")
+@limiter.limit("30/minute")
+async def get_gas_price(request: Request, pretty: bool = False):
+    """Get current gas price"""
+    global vm_manager
+    
+    if not VM_AVAILABLE:
+        result = {'ok': False, 'error': 'Smart contract functionality not available'}
+    elif not vm_manager:
+        result = {'ok': False, 'error': 'VM Manager not initialized'}
+    else:
+        try:
+            gas_price = await vm_manager.blockchain_interface.get_gas_price()
+            result = {
+                'ok': True,
+                'result': {
+                    'gas_price': str(gas_price),
+                    'unit': 'tokens_per_gas'
+                }
+            }
+        except Exception as e:
+            result = {'ok': False, 'error': f'Internal server error: {str(e)}'}
+    
+    return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+
+
+@app.get("/get_contracts_by_deployer")
+@limiter.limit("10/minute")
+async def get_contracts_by_deployer(request: Request, deployer_address: str, pretty: bool = False):
+    """Get all contracts deployed by a specific address"""
+    try:
+        contracts = await db.get_contracts_by_deployer(deployer_address)
+        result = {'ok': True, 'result': contracts}
+    except Exception as e:
+        result = {'ok': False, 'error': str(e)}
+    
+    return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+
+
+@app.get("/get_all_contracts")
+@limiter.limit("5/minute")
+async def get_all_contracts(request: Request, pretty: bool = False):
+    """Get list of all contract addresses"""
+    try:
+        contracts = await db.get_all_contracts()
+        result = {'ok': True, 'result': contracts}
+    except Exception as e:
+        result = {'ok': False, 'error': str(e)}
+    
+    return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+
+
+# Initialize VM Manager when database is ready
+async def initialize_vm_manager():
+    """Initialize the VM Manager"""
+    global vm_manager, db
+    
+    if not VM_AVAILABLE:
+        print("⚠️  VM components not available, smart contract functionality disabled")
+        return
+    
+    if db and not vm_manager:
+        try:
+            vm_manager = StellarisVMManager(
+                database=db, 
+                max_workers=4, 
+                vm_pool_size=8,
+                enable_caching=True
+            )
+            print("✅ VM Manager initialized successfully")
+        except Exception as e:
+            print(f"❌ Failed to initialize VM Manager: {e}")
+            import traceback
+            traceback.print_exc()
+
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):

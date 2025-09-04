@@ -28,12 +28,20 @@ class Database:
         self.pending_transactions_file = None
         self.unspent_outputs_file = None
         self.pending_spent_outputs_file = None
+        # Smart contract related storage
+        self.contracts_file = None
+        self.contract_storage_file = None
+        
         self._blocks = {}
         self._transactions = {}
         self._pending_transactions = {}
         self._unspent_outputs = set()
         self._pending_spent_outputs = set()
         self._transaction_block_map = {}
+        # Smart contract storage
+        self._contracts = {}
+        self._contract_storage = {}
+        
         self.is_indexed = True
         self._lock = asyncio.Lock()
 
@@ -48,6 +56,9 @@ class Database:
         self.pending_transactions_file = self.data_dir / 'pending_transactions.json.gz'
         self.unspent_outputs_file = self.data_dir / 'unspent_outputs.json.gz'
         self.pending_spent_outputs_file = self.data_dir / 'pending_spent_outputs.json.gz'
+        # Smart contract files
+        self.contracts_file = self.data_dir / 'contracts.json.gz'
+        self.contract_storage_file = self.data_dir / 'contract_storage.json.gz'
         
         await self._load_data()
         Database.instance = self
@@ -80,6 +91,10 @@ class Database:
         self._blocks = await self._load_from_file(self.blocks_file)
         self._transactions = await self._load_from_file(self.transactions_file)
         self._pending_transactions = await self._load_from_file(self.pending_transactions_file)
+        
+        # Load smart contract data
+        self._contracts = await self._load_from_file(self.contracts_file)
+        self._contract_storage = await self._load_from_file(self.contract_storage_file)
         
         unspent_data = await self._load_from_file(self.unspent_outputs_file)
         self._unspent_outputs = set(tuple(item) for item in unspent_data.get('outputs', []))
@@ -895,3 +910,87 @@ class Database:
         
         transaction['outputs'] = [{'address': output.address, 'amount': output.amount} for output in tx.outputs]
         return transaction
+
+    # Smart Contract Database Methods
+    
+    async def _save_contracts(self):
+        """Save contract data to file"""
+        await self._save_to_file(self.contracts_file, self._contracts)
+    
+    async def _save_contract_storage(self):
+        """Save contract storage to file"""
+        await self._save_to_file(self.contract_storage_file, self._contract_storage)
+    
+    async def save_contract_state(self, contract_address: str, state_data: dict):
+        """Save contract state to database"""
+        async with self._lock:
+            self._contracts[contract_address] = state_data
+            await self._save_contracts()
+    
+    async def get_contract_state(self, contract_address: str) -> dict:
+        """Get contract state from database"""
+        return self._contracts.get(contract_address)
+    
+    async def set_contract_storage(self, contract_address: str, key: str, value):
+        """Set contract storage value"""
+        async with self._lock:
+            if contract_address not in self._contract_storage:
+                self._contract_storage[contract_address] = {}
+            self._contract_storage[contract_address][key] = value
+            await self._save_contract_storage()
+    
+    async def get_contract_storage(self, contract_address: str, key: str):
+        """Get contract storage value"""
+        storage = self._contract_storage.get(contract_address, {})
+        return storage.get(key)
+    
+    async def get_contract_code(self, contract_address: str) -> str:
+        """Get contract code"""
+        contract_data = self._contracts.get(contract_address)
+        return contract_data.get('code', '') if contract_data else ''
+    
+    async def get_contract_info(self, contract_address: str) -> dict:
+        """Get complete contract information"""
+        contract_data = self._contracts.get(contract_address)
+        if not contract_data:
+            return None
+        
+        storage_keys = list(self._contract_storage.get(contract_address, {}).keys())
+        
+        return {
+            'address': contract_address,
+            'deployed_by': contract_data.get('deployed_by', ''),
+            'deployment_block': contract_data.get('deployment_block', 0),
+            'balance': contract_data.get('balance', '0'),
+            'code': contract_data.get('code', ''),
+            'storage_keys': storage_keys
+        }
+    
+    async def get_contracts_by_deployer(self, deployer_address: str) -> List[dict]:
+        """Get all contracts deployed by a specific address"""
+        contracts = []
+        for address, data in self._contracts.items():
+            if data.get('deployed_by') == deployer_address:
+                contracts.append({
+                    'address': address,
+                    'deployment_block': data.get('deployment_block', 0),
+                    'balance': data.get('balance', '0')
+                })
+        return contracts
+    
+    async def get_all_contracts(self) -> List[str]:
+        """Get list of all contract addresses"""
+        return list(self._contracts.keys())
+    
+    async def contract_exists(self, contract_address: str) -> bool:
+        """Check if a contract exists"""
+        return contract_address in self._contracts
+    
+    async def get_transaction_count(self, address: str) -> int:
+        """Get transaction count for an address (nonce)"""
+        count = 0
+        for tx_data in self._transactions.values():
+            inputs_addresses = tx_data.get('inputs_addresses', [])
+            if address in inputs_addresses:
+                count += 1
+        return count

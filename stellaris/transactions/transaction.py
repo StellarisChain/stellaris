@@ -244,7 +244,9 @@ class Transaction:
             # If set_timestamp is False, convert the entire hexstring to bytes
         #    tx_bytes = BytesIO(bytes.fromhex(hexstring))
 
-        tx_bytes = BytesIO(bytes.fromhex(hexstring))
+        # Remove 0x prefix if present
+        clean_hex = hexstring[2:] if hexstring.startswith('0x') else hexstring
+        tx_bytes = BytesIO(bytes.fromhex(clean_hex))
         version = int.from_bytes(tx_bytes.read(1), ENDIAN)
         if version > 3:
             raise NotImplementedError()

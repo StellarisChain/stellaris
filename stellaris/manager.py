@@ -7,7 +7,7 @@ from typing import Tuple, List, Union
 from stellaris.database import Database, OLD_BLOCKS_TRANSACTIONS_ORDER
 from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX, BLOCK_CONFIG
 from stellaris.utils.general import sha256, timestamp, bytes_to_string, string_to_bytes
-from stellaris.transactions import CoinbaseTransaction, Transaction
+from stellaris.transactions import CoinbaseTransaction, Transaction, SmartContractTransaction
 from stellaris.utils.block_utils import calculate_difficulty, difficulty_to_hashrate, difficulty_to_hashrate_old, hashrate_to_difficulty, hashrate_to_difficulty_old, hashrate_to_difficulty_wrong, BLOCK_TIME, BLOCKS_COUNT, START_DIFFICULTY
 
 async def get_difficulty() -> Tuple[Decimal, dict]:
