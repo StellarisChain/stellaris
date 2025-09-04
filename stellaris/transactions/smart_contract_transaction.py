@@ -111,7 +111,7 @@ class SmartContractTransaction(Transaction):
             contract_data_bytes.hex()
         )
         
-        return '0x' if prefix else '' + base_hex + contract_hex
+        return ('0x' if prefix else '') + base_hex + contract_hex
     
     @classmethod
     async def from_hex(cls, hex_string: str, check_signatures: bool = True):
@@ -130,57 +130,114 @@ class SmartContractTransaction(Transaction):
             # Parse regular transaction data first
             version = int.from_bytes(data_stream.read(1), ENDIAN)
             
-            # Skip input/output counts and data (simplified parsing)
+            # Parse inputs properly
             input_count = int.from_bytes(data_stream.read(1), ENDIAN)
+            inputs = []
             for _ in range(input_count):
-                # Skip input data (32 bytes hash + 1 byte index + variable signature)
-                data_stream.read(32)  # tx_hash
-                data_stream.read(1)   # index
-                sig_len = int.from_bytes(data_stream.read(1), ENDIAN)
-                data_stream.read(sig_len)  # signature
+                # Parse each input - this is simplified but should work for basic cases
+                # tx_hash (32 bytes), index (1 byte), then skip signature data
+                tx_hash = data_stream.read(32).hex()
+                index = int.from_bytes(data_stream.read(1), ENDIAN)
+                
+                # Create a basic TransactionInput (without private key for parsing)
+                tx_input = TransactionInput(tx_hash, index)
+                inputs.append(tx_input)
+                
+                # Skip signature data - find signature length and skip it
+                # This is a simplified approach - we're just trying to get past the signature
+                try:
+                    sig_len = int.from_bytes(data_stream.read(1), ENDIAN)
+                    data_stream.read(sig_len)
+                except:
+                    # If we can't read signature properly, try to find the next part
+                    break
             
+            # Parse outputs properly
             output_count = int.from_bytes(data_stream.read(1), ENDIAN)
+            outputs = []
             for _ in range(output_count):
-                # Skip output data (8 bytes amount + variable address)
-                data_stream.read(8)  # amount
-                addr_len = int.from_bytes(data_stream.read(1), ENDIAN)
-                data_stream.read(addr_len)  # address
+                try:
+                    # Parse each output - amount (8 bytes), then address
+                    amount_bytes = data_stream.read(8)
+                    amount = Decimal(str(int.from_bytes(amount_bytes, ENDIAN))) / Decimal('1000000')
+                    
+                    # Address length and address
+                    addr_len = int.from_bytes(data_stream.read(1), ENDIAN)
+                    address = data_stream.read(addr_len).decode('utf-8')
+                    
+                    tx_output = TransactionOutput(address, amount)
+                    outputs.append(tx_output)
+                except:
+                    # If we can't parse outputs properly, continue
+                    break
             
-            # Skip message length and message
-            msg_len = int.from_bytes(data_stream.read(4), ENDIAN)
-            data_stream.read(msg_len)
+            # Skip message
+            try:
+                msg_len = int.from_bytes(data_stream.read(4), ENDIAN)
+                data_stream.read(msg_len)
+            except:
+                pass
             
             # Parse smart contract data
-            contract_data_len = int.from_bytes(data_stream.read(4), ENDIAN)
-            contract_data_bytes = data_stream.read(contract_data_len)
-            contract_data = json.loads(contract_data_bytes.decode('utf-8'))
+            try:
+                contract_data_len = int.from_bytes(data_stream.read(4), ENDIAN)
+                contract_data_bytes = data_stream.read(contract_data_len)
+                contract_data = json.loads(contract_data_bytes.decode('utf-8'))
+                
+                # Create smart contract transaction with the parsed inputs and outputs
+                sc_tx = cls(
+                    inputs=inputs,
+                    outputs=outputs,
+                    operation_type=contract_data.get('operation_type', cls.OPERATION_DEPLOY),
+                    contract_address=contract_data.get('contract_address', ''),
+                    contract_code=contract_data.get('contract_code', ''),
+                    method_name=contract_data.get('method_name', ''),
+                    method_args=contract_data.get('method_args', []),
+                    gas_limit=contract_data.get('gas_limit', 100000)
+                )
+                
+                sc_tx._hex = hex_string
+                return sc_tx
+            except Exception as e:
+                # If contract data parsing fails, try the fallback approach
+                pass
             
-            # Create smart contract transaction
-            sc_tx = cls(
-                inputs=[],  # Simplified for now
-                outputs=[],  # Simplified for now
-                operation_type=contract_data.get('operation_type', cls.OPERATION_DEPLOY),
-                contract_address=contract_data.get('contract_address', ''),
-                contract_code=contract_data.get('contract_code', ''),
-                method_name=contract_data.get('method_name', ''),
-                method_args=contract_data.get('method_args', []),
-                gas_limit=contract_data.get('gas_limit', 100000)
-            )
+            # Fallback: try to find contract data at the end
+            data_stream.seek(0)
+            all_data = data_stream.read()
             
-            sc_tx._hex = hex_string
-            return sc_tx
+            # Work backwards from the end to find JSON contract data
+            for i in range(len(all_data) - 4, 0, -1):
+                try:
+                    potential_len = int.from_bytes(all_data[i:i+4], ENDIAN)
+                    if potential_len > 0 and i + 4 + potential_len <= len(all_data):
+                        contract_data_bytes = all_data[i+4:i+4+potential_len]
+                        contract_data_str = contract_data_bytes.decode('utf-8')
+                        if contract_data_str.startswith('{') and contract_data_str.endswith('}'):
+                            contract_data = json.loads(contract_data_str)
+                            
+                            # Create smart contract transaction with the parsed inputs and outputs
+                            sc_tx = cls(
+                                inputs=inputs,
+                                outputs=outputs,
+                                operation_type=contract_data.get('operation_type', cls.OPERATION_DEPLOY),
+                                contract_address=contract_data.get('contract_address', ''),
+                                contract_code=contract_data.get('contract_code', ''),
+                                method_name=contract_data.get('method_name', ''),
+                                method_args=contract_data.get('method_args', []),
+                                gas_limit=contract_data.get('gas_limit', 100000)
+                            )
+                            
+                            sc_tx._hex = hex_string
+                            return sc_tx
+                except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+            
+            # If we couldn't parse the contract data, raise an error
+            raise ValueError("Could not parse smart contract data from hex")
             
         except Exception as e:
-            # Fallback to basic transaction for compatibility
-            sc_tx = cls(
-                inputs=[],
-                outputs=[],
-                operation_type=cls.OPERATION_DEPLOY,
-                contract_code="",
-                gas_limit=100000
-            )
-            sc_tx._hex = hex_string
-            return sc_tx
+            raise ValueError(f"Invalid transaction hex: {e}")
     
     def hash(self) -> str:
         """Get transaction hash"""
