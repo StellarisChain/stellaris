@@ -572,7 +572,7 @@ async def deploy_contract(request: Request, data: dict = Body(...)):
         if not sc_transaction.inputs:
             return {'ok': False, 'error': 'Transaction must have inputs to determine sender'}
         
-        sender = sc_transaction.inputs[0].get_address()
+        sender = await sc_transaction.inputs[0].get_address()
         
         # Validate gas limit
         if sc_transaction.gas_limit <= 0:
@@ -656,7 +656,7 @@ async def call_contract(request: Request, data: dict = Body(...)):
         if not sc_transaction.inputs:
             return {'ok': False, 'error': 'Transaction must have inputs to determine sender'}
         
-        sender = sc_transaction.inputs[0].get_address()
+        sender =  await sc_transaction.inputs[0].get_address()
         
         # Validate gas limit
         if sc_transaction.gas_limit <= 0:

@@ -15,6 +15,7 @@ import sys
 import json
 import time
 import asyncio
+import aiohttp
 from decimal import Decimal
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -26,15 +27,12 @@ sys.path.insert(0, str(project_root / "stellaris_wallet"))
 sys.path.insert(0, str(project_root / "stellaris_wallet" / "stellaris" / "wallet" / "utils"))
 
 # Core Stellaris imports
-from stellaris.svm.vm import StellarisVM
 from stellaris.svm.transaction_builder import SmartContractTransactionBuilder
-from stellaris.svm.blockchain_interface import StellarisBlockchainInterface
 from stellaris.transactions.smart_contract_transaction import SmartContractTransaction
 from stellaris.transactions.transaction import Transaction
 from stellaris.transactions.transaction_input import TransactionInput
 from stellaris.transactions.transaction_output import TransactionOutput
 from stellaris.utils.general import point_to_string, string_to_point
-from stellaris.database import Database
 from stellaris.constants import SMALLEST
 
 # Wallet-related imports (simplified approach)
@@ -59,12 +57,16 @@ except ImportError as e:
 class ContractDeployer:
     """Main class for contract deployment operations"""
     
-    def __init__(self, node_url: str = "http://localhost:6003"):
+    def __init__(self, node_url: str = None):
+        # Use environment variable or default to localhost:3006
+        if node_url is None:
+            node_host = os.getenv("NODE_HOST", "localhost")
+            node_port = os.getenv("NODE_PORT", "3006")
+            node_url = f"http://{node_host}:{node_port}"
+        
         self.node_url = node_url.rstrip('/')
         self.builder = SmartContractTransactionBuilder()
-        self.blockchain_interface = StellarisBlockchainInterface()
-        self.vm = None
-        self.database = None
+        self.session = None
         
         # Available contracts
         self.contracts = {
@@ -89,16 +91,40 @@ class ContractDeployer:
         }
     
     async def initialize(self):
-        """Initialize database and VM connections"""
+        """Initialize HTTP session and test connection to node"""
         try:
-            self.database = await Database.get()
-            self.vm = StellarisVM()
-            self.blockchain_interface.database = self.database
-            print("✅ Connected to Stellaris network")
+            self.session = aiohttp.ClientSession()
+            
+            # Test connection to node
+            async with self.session.get(f"{self.node_url}/docs") as response:
+                if response.status == 200:
+                    print("✅ Connected to Stellaris node")
+                    return True
+                else:
+                    print(f"❌ Failed to connect to Stellaris node: HTTP {response.status}")
+                    await self.session.close()
+                    self.session = None
+                    return False
         except Exception as e:
-            print(f"❌ Failed to connect to Stellaris network: {e}")
+            print(f"❌ Failed to connect to Stellaris node: {e}")
+            print("\n💡 To start the local Stellaris node:")
+            print("   1. Make sure you're in the project directory")
+            print("   2. Run: python run_node.py")
+            print("   3. Or run: ./run.sh")
+            print("\n💡 The node will be available at:")
+            print(f"   - Local: http://localhost:{os.getenv('NODE_PORT', '3006')}")
+            print("   - Production: https://stellaris-node.connor33341.dev")
+            print("\n💡 You can also set NODE_HOST and NODE_PORT environment variables")
+            print("   to connect to different endpoints.")
+            if self.session:
+                await self.session.close()
+                self.session = None
             return False
-        return True
+    
+    async def close(self):
+        """Close HTTP session"""
+        if self.session and not self.session.closed:
+            await self.session.close()
     
     def display_menu(self):
         """Display the contract selection menu"""
@@ -291,19 +317,40 @@ class ContractDeployer:
         return params
     
     async def check_balance(self, address: str) -> Decimal:
-        """Check account balance"""
+        """Check account balance via API"""
         try:
-            balance = await self.database.get_address_balance(address)
-            return balance
+            async with self.session.get(f"{self.node_url}/get_address_info", 
+                                      params={"address": address, "transactions_count_limit": 0}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('ok'):
+                        balance_str = data['result']['balance']
+                        return Decimal(balance_str)
+                    else:
+                        print(f"❌ API error: {data.get('error', 'Unknown error')}")
+                        return Decimal('0')
+                else:
+                    print(f"❌ HTTP error: {response.status}")
+                    return Decimal('0')
         except Exception as e:
             print(f"❌ Error checking balance: {e}")
             return Decimal('0')
     
-    async def get_spendable_outputs(self, address: str) -> List[TransactionInput]:
-        """Get spendable outputs for the address"""
+    async def get_spendable_outputs(self, address: str) -> List[Dict]:
+        """Get spendable outputs for the address via API"""
         try:
-            outputs = await self.database.get_spendable_outputs(address)
-            return outputs
+            async with self.session.get(f"{self.node_url}/get_address_info", 
+                                      params={"address": address, "transactions_count_limit": 0}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('ok'):
+                        return data['result']['spendable_outputs']
+                    else:
+                        print(f"❌ API error: {data.get('error', 'Unknown error')}")
+                        return []
+                else:
+                    print(f"❌ HTTP error: {response.status}")
+                    return []
         except Exception as e:
             print(f"❌ Error getting spendable outputs: {e}")
             return []
@@ -317,6 +364,7 @@ class ContractDeployer:
             
             # Load contract code
             contract_code = self.load_contract_code(contract_info)
+            print(f"📜 Contract code length {len(contract_code)}")
             if not contract_code:
                 return False
             
@@ -334,8 +382,8 @@ class ContractDeployer:
                 print("❌ No spendable outputs found")
                 return False
             
-            # Calculate total available
-            total_available = sum(output.amount for output in spendable_outputs)
+            # Calculate total available - outputs from API are dictionaries
+            total_available = sum(Decimal(output['amount']) for output in spendable_outputs)
             print(f"💰 Total spendable: {total_available} STE")
             
             # Prepare constructor arguments
@@ -363,17 +411,17 @@ class ContractDeployer:
             inputs = []
             input_amount = Decimal('0')
             
-            # Use available outputs as inputs
+            # Use available outputs as inputs - API returns dictionaries
             for output in spendable_outputs:
                 if input_amount < fee_amount:
                     tx_input = TransactionInput(
-                        input_tx_hash=output.tx_hash,
-                        index=output.index,
+                        input_tx_hash=output['tx_hash'],
+                        index=output['index'],
                         private_key=private_key,
-                        amount=output.amount
+                        amount=Decimal(output['amount'])
                     )
                     inputs.append(tx_input)
-                    input_amount += output.amount
+                    input_amount += Decimal(output['amount'])
                 else:
                     break
             
@@ -393,8 +441,11 @@ class ContractDeployer:
                 method_args=constructor_args,
                 gas_limit=params['gas_limit']
             )
+
+            # Test Hex
+            from_hex = await SmartContractTransaction.from_hex(sc_transaction.hex())
+            print(f"Code length: {len(from_hex.contract_code)}")
             
-            # Create the transaction (SmartContractTransaction handles this internally)
             # Sign the transaction
             sc_transaction.sign([private_key])
             
@@ -404,20 +455,33 @@ class ContractDeployer:
             deployment_address = self.builder.get_deployment_address(sc_transaction, address)
             print(f"📍 Contract will be deployed at: {deployment_address}")
             
-            # Submit to network (simplified - in real implementation, submit to node)
+            # Submit to network via API
             print("📡 Submitting to network...")
             
-            # Add to pending transactions
-            await self.database.add_pending_transaction(sc_transaction)
+            # Submit transaction via deploy_contract API
+            tx_hex = sc_transaction.hex()
+            deploy_data = {
+                "transaction_hex": tx_hex
+            }
             
-            print("✅ Contract deployment submitted successfully!")
-            print(f"📍 Contract Address: {deployment_address}")
-            print(f"🔗 Transaction Hash: {sc_transaction.hash()}")
-            
-            # Save deployment info
-            self._save_deployment_info(contract_info, deployment_address, sc_transaction.hash(), params)
-            
-            return True
+            async with self.session.post(f"{self.node_url}/deploy_contract", 
+                                       json=deploy_data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get('ok'):
+                        print("✅ Contract deployment submitted successfully!")
+                        print(f"📍 Contract Address: {deployment_address}")
+                        print(f"🔗 Transaction Hash: {sc_transaction.hash()}")
+                        
+                        # Save deployment info
+                        self._save_deployment_info(contract_info, deployment_address, sc_transaction.hash(), params)
+                        return True
+                    else:
+                        print(f"❌ Deployment failed: {result.get('error', 'Unknown error')}")
+                        return False
+                else:
+                    print(f"❌ HTTP error: {response.status}")
+                    return False
             
         except Exception as e:
             print(f"❌ Deployment failed: {e}")
@@ -465,10 +529,10 @@ class ContractDeployer:
         if not await self.initialize():
             return
         
-        while True:
-            self.display_menu()
-            
-            try:
+        try:
+            while True:
+                self.display_menu()
+                
                 choice = input("\nSelect contract to deploy (0 to exit): ").strip()
                 
                 if choice == "0":
@@ -506,22 +570,26 @@ class ContractDeployer:
                     print("❌ Deployment cancelled")
                     continue
                 
-                # Deploy the contract
-                success = await self.deploy_contract(contract_info, params, address, private_key)
-                
-                if success:
-                    print("\n🎉 Deployment completed successfully!")
-                else:
-                    print("\n💥 Deployment failed!")
-                
-                input("\nPress Enter to continue...")
-                
-            except KeyboardInterrupt:
-                print("\n\n👋 Goodbye!")
-                break
-            except Exception as e:
-                print(f"\n❌ Unexpected error: {e}")
-                input("Press Enter to continue...")
+                try:
+                    # Deploy the contract
+                    success = await self.deploy_contract(contract_info, params, address, private_key)
+                    
+                    if success:
+                        print("\n🎉 Deployment completed successfully!")
+                    else:
+                        print("\n💥 Deployment failed!")
+                    
+                    input("\nPress Enter to continue...")
+                    
+                except Exception as e:
+                    print(f"\n❌ Deployment error: {e}")
+                    input("Press Enter to continue...")
+                    
+        except KeyboardInterrupt:
+            print("\n\n👋 Goodbye!")
+        finally:
+            # Clean up resources
+            await self.close()
 
 
 async def main():
@@ -533,6 +601,9 @@ async def main():
 if __name__ == "__main__":
     print("🌟 Stellaris Smart Contract Deployer")
     print("====================================")
+    print(f"📡 Node URL: {os.getenv('NODE_HOST', 'localhost')}:{os.getenv('NODE_PORT', '3006')}")
+    print("💡 Use NODE_HOST and NODE_PORT environment variables to change endpoint")
+    print()
     
     try:
         asyncio.run(main())
