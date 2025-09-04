@@ -26,7 +26,8 @@ node_modules
 .pypirc
 *.cache.txt
 test_*
-stellaris-wallet
+stellaris_wallet
 deploy_smart_contracts.py
 SMART_CONTRACTS.md
 docs
+deployments.json
