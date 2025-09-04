@@ -69,7 +69,7 @@ class SmartContractTransaction(Transaction):
         else:
             raise ValueError(f"Invalid operation type: {operation_type}")
     
-    def hex(self, full: bool = True):
+    def hex(self, full: bool = True, prefix = False):
         """Generate hex representation of transaction"""
         # Basic transaction structure for smart contracts
         inputs_hex = ''.join(tx_input.tobytes().hex() for tx_input in self.inputs)
@@ -111,7 +111,7 @@ class SmartContractTransaction(Transaction):
             contract_data_bytes.hex()
         )
         
-        return '0x' + base_hex + contract_hex
+        return '0x' if prefix else '' + base_hex + contract_hex
     
     @classmethod
     async def from_hex(cls, hex_string: str, check_signatures: bool = True):
