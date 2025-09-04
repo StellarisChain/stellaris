@@ -6,6 +6,7 @@ from multiprocessing import Process
 
 import requests
 
+sys.path.insert(0, '..')
 from stellaris.constants import ENDIAN
 from stellaris.utils.general import string_to_bytes, timestamp
 
