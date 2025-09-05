@@ -16,6 +16,82 @@ async def get_difficulty() -> Tuple[Decimal, dict]:
     return Manager.difficulty
 
 
+async def _process_smart_contract_transactions(transactions: List[Transaction], block_no: int, block_hash: str):
+    """
+    Process smart contract transactions when they are mined into a block.
+    This ensures contract state is properly persisted.
+    """
+    try:
+        # Try to import VM components
+        from stellaris.svm.vm_manager import StellarisVMManager
+        from stellaris.transactions.smart_contract_transaction import SmartContractTransaction
+        
+        # Count smart contract transactions
+        sc_transactions = [tx for tx in transactions if isinstance(tx, SmartContractTransaction)]
+        if not sc_transactions:
+            return  # No smart contract transactions to process
+        
+        print(f"📋 Processing {len(sc_transactions)} smart contract transaction(s) in block {block_no}")
+        
+        # Get or create VM manager instance
+        database = Database.instance
+        vm_manager = StellarisVMManager(database=database)
+        
+        for transaction in sc_transactions:
+            try:
+                # Get sender address from transaction inputs
+                sender = await transaction.inputs[0].get_address() if transaction.inputs else "unknown"
+                
+                if transaction.is_deployment():
+                    # For deployments, check if contract already exists (in case it was processed during API call)
+                    contract_address = transaction.contract_address
+                    existing_contract = await database.get_contract_state(contract_address) if contract_address else None
+                    
+                    if existing_contract:
+                        print(f"✅ Contract already deployed (from API call): {contract_address}")
+                        # Update deployment block if needed
+                        if existing_contract.get('deployment_block', 0) == 0:
+                            existing_contract['deployment_block'] = block_no
+                            await database.save_contract_state(contract_address, existing_contract)
+                    else:
+                        print(f"🚀 Deploying contract in block {block_no}")
+                        # Re-execute deployment to persist state
+                        result = await vm_manager.deploy_contract(transaction, sender)
+                        if result.success:
+                            print(f"✅ Contract deployed at: {result.result}")
+                            # Update with block info
+                            contract_state = await database.get_contract_state(result.result)
+                            if contract_state:
+                                contract_state['deployment_block'] = block_no
+                                await database.save_contract_state(result.result, contract_state)
+                        else:
+                            print(f"❌ Contract deployment failed: {result.error}")
+                else:
+                    print(f"📞 Executing contract call in block {block_no}: {transaction.contract_address}.{transaction.method_name}")
+                    # Re-execute call to persist state changes
+                    result = await vm_manager.call_contract(transaction, sender)
+                    if result.success:
+                        print(f"✅ Contract call successful")
+                    else:
+                        print(f"❌ Contract call failed: {result.error}")
+                        
+            except Exception as e:
+                print(f"❌ Error processing smart contract transaction {transaction.hash()}: {e}")
+                # Don't fail the entire block for SC errors, just log them
+                continue
+        
+        print(f"✅ Finished processing smart contract transactions in block {block_no}")
+                    
+    except ImportError:
+        # VM components not available, skip smart contract processing
+        print("⚠️  Smart contract VM not available, skipping SC transaction processing")
+        pass
+    except Exception as e:
+        print(f"⚠️  Error during smart contract processing: {e}")
+        # Don't fail block creation for SC processing errors
+        pass
+
+
 async def check_block_is_valid(block_content: str, mining_info: tuple = None) -> bool:
     if mining_info is None:
         mining_info = await get_difficulty()
@@ -269,6 +345,10 @@ async def create_block(block_content: str, transactions: List[Transaction], last
         await database.add_transactions(transactions, block_hash)
         if len(transactions) > 1 and block_no < 22500:
             OLD_BLOCKS_TRANSACTIONS_ORDER.set(block_hash, [transaction.hex() for transaction in transactions])
+        
+        # Process smart contract transactions in the block
+        await _process_smart_contract_transactions(transactions, block_no, block_hash)
+        
     except Exception as e:
         print(f'a transaction has not been added in block', e)
         await database.delete_block(block_no)
