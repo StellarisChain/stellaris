@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 """
-Smart Contract Deployment Script for Stellaris Blockchain
+Smart Contract Management Script for Stellaris Blockchain
 
-This script provides an interactive menu for selecting and deploying smart contracts
-to the Stellaris blockchain. It integrates with the wallet system to handle credentials
-and transaction signing.
+This script provides an interactive interface for:
+- Deploying smart contracts to the Stellaris blockchain
+- Calling methods on deployed contracts (both view and state-changing calls)
+- Listing previously deployed contracts
+- Managing contract interactions with wallet integration
+
+Features:
+- Deploy new smart contracts with customizable parameters
+- Call contract methods with automatic method detection
+- View-only calls for reading contract state
+- State-changing calls that create transactions
+- Track deployment history in deployments.json
+- Integration with Stellaris wallet system
 
 SETUP: you need to have stellaris-wallet cloned in the root directory, then renamed to stellaris_wallet
 and install its dependencies with pip install -r stellaris_wallet/requirements.txt
@@ -55,7 +65,7 @@ except ImportError as e:
 
 
 class ContractDeployer:
-    """Main class for contract deployment operations"""
+    """Main class for contract deployment and interaction operations"""
     
     def __init__(self, node_url: str = None):
         # Use environment variable or default to localhost:3006
@@ -127,10 +137,23 @@ class ContractDeployer:
             await self.session.close()
     
     def display_menu(self):
-        """Display the contract selection menu"""
+        """Display the main menu"""
         print("\n" + "="*60)
-        print("🚀 STELLARIS SMART CONTRACT DEPLOYER")
+        print("🚀 STELLARIS SMART CONTRACT MANAGER")
         print("="*60)
+        print("\nChoose an action:")
+        print("-" * 40)
+        print("D. Deploy a new contract")
+        print("C. Call existing contract")
+        print("L. List deployed contracts")
+        print("0. Exit")
+        print("-" * 40)
+    
+    def display_deploy_menu(self):
+        """Display the contract deployment menu"""
+        print("\n" + "="*50)
+        print("📜 CONTRACT DEPLOYMENT")
+        print("="*50)
         print("\nAvailable Smart Contracts:")
         print("-" * 40)
         
@@ -140,7 +163,7 @@ class ContractDeployer:
             print(f"   📁 {contract['file']}")
             print()
         
-        print("0. Exit")
+        print("0. Back to main menu")
         print("-" * 40)
     
     def get_wallet_credentials(self) -> Optional[Tuple[str, int]]:
@@ -501,7 +524,8 @@ class ContractDeployer:
                 "contract_class": contract_info['class_name'],
                 "contract_address": contract_address,
                 "transaction_hash": tx_hash,
-                "parameters": params
+                "parameters": params,
+                "source_file": contract_info['file']
             }
             
             # Load existing deployments
@@ -522,9 +546,271 @@ class ContractDeployer:
         except Exception as e:
             print(f"⚠️  Could not save deployment info: {e}")
     
+    def load_deployed_contracts(self) -> List[Dict]:
+        """Load list of deployed contracts from deployments.json"""
+        try:
+            deployments_file = Path("deployments.json")
+            if not deployments_file.exists():
+                return []
+            
+            with open(deployments_file, 'r') as f:
+                deployments = json.load(f)
+            
+            return deployments
+            
+        except Exception as e:
+            print(f"❌ Error loading deployed contracts: {e}")
+            return []
+    
+    def display_deployed_contracts(self, deployments: List[Dict]):
+        """Display list of deployed contracts"""
+        if not deployments:
+            print("📭 No deployed contracts found")
+            print("💡 Deploy a contract first using the 'D' option")
+            return
+        
+        print("\n" + "="*60)
+        print("📋 DEPLOYED CONTRACTS")
+        print("="*60)
+        
+        for i, deployment in enumerate(deployments, 1):
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(deployment['timestamp']))
+            print(f"\n{i}. {deployment['contract_name']} ({deployment['contract_class']})")
+            print(f"   📍 Address: {deployment['contract_address']}")
+            print(f"   🔗 TX Hash: {deployment['transaction_hash']}")
+            print(f"   📅 Deployed: {timestamp}")
+            if 'parameters' in deployment:
+                params = deployment['parameters']
+                if params:
+                    print(f"   ⚙️  Parameters: {params}")
+    
+    def select_deployed_contract(self, deployments: List[Dict]) -> Optional[Dict]:
+        """Let user select a deployed contract"""
+        if not deployments:
+            return None
+        
+        self.display_deployed_contracts(deployments)
+        
+        try:
+            choice = input(f"\nSelect contract (1-{len(deployments)}) or 0 to cancel: ").strip()
+            if choice == "0":
+                return None
+            
+            index = int(choice) - 1
+            if 0 <= index < len(deployments):
+                return deployments[index]
+            else:
+                print("❌ Invalid selection")
+                return None
+                
+        except ValueError:
+            print("❌ Invalid input")
+            return None
+    
+    def get_contract_methods(self, contract_file: str) -> List[str]:
+        """Extract available methods from contract source code"""
+        try:
+            if not Path(contract_file).exists():
+                print(f"⚠️  Contract source file not found: {contract_file}")
+                return []
+            
+            with open(contract_file, 'r') as f:
+                content = f.read()
+            
+            # Simple method extraction - look for def methods
+            methods = []
+            lines = content.split('\n')
+            
+            for line in lines:
+                line = line.strip()
+                if line.startswith('def ') and not line.startswith('def __'):
+                    # Extract method name
+                    method_name = line.split('(')[0].replace('def ', '').strip()
+                    if method_name not in ['constructor']:  # Skip constructor
+                        methods.append(method_name)
+            
+            return methods
+            
+        except Exception as e:
+            print(f"❌ Error extracting methods: {e}")
+            return []
+    
+    def get_call_parameters(self, method_name: str) -> Tuple[List[str], bool]:
+        """Get parameters for contract method call"""
+        print(f"\n⚙️  CALLING METHOD: {method_name}")
+        print("-" * 40)
+        
+        # Ask if this is a view call or state-changing call
+        call_type = input("Is this a view call (read-only)? (y/n): ").lower().strip()
+        is_view = call_type == 'y'
+        
+        # Get method arguments
+        args = []
+        print("\nEnter method arguments (press Enter with no input to finish):")
+        
+        arg_index = 0
+        while True:
+            arg_value = input(f"Argument {arg_index + 1}: ").strip()
+            if not arg_value:
+                break
+            args.append(arg_value)
+            arg_index += 1
+        
+        return args, is_view
+    
+    async def call_contract_method(self, contract_address: str, method_name: str, 
+                                 method_args: List[str], is_view: bool,
+                                 sender_address: str, private_key: int) -> bool:
+        """Call a method on a deployed contract"""
+        try:
+            print(f"\n📞 CALLING CONTRACT METHOD")
+            print("-" * 30)
+            print(f"Contract: {contract_address}")
+            print(f"Method: {method_name}")
+            print(f"Arguments: {method_args}")
+            print(f"View call: {is_view}")
+            
+            if is_view:
+                # For view calls, use the call_contract API endpoint
+                call_data = {
+                    "contract_address": contract_address,
+                    "method_name": method_name,
+                    "method_args": method_args,
+                    "sender_address": sender_address
+                }
+                
+                async with self.session.post(f"{self.node_url}/call_contract", 
+                                           json=call_data) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if result.get('ok'):
+                            print("✅ View call successful!")
+                            print(f"📤 Result: {result.get('result', 'No return value')}")
+                            return True
+                        else:
+                            print(f"❌ View call failed: {result.get('error', 'Unknown error')}")
+                            return False
+                    else:
+                        print(f"❌ HTTP error: {response.status}")
+                        return False
+            else:
+                # For state-changing calls, create and submit a transaction
+                return await self._create_call_transaction(
+                    contract_address, method_name, method_args, 
+                    sender_address, private_key
+                )
+                
+        except Exception as e:
+            print(f"❌ Contract call failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    async def _create_call_transaction(self, contract_address: str, method_name: str,
+                                     method_args: List[str], sender_address: str, 
+                                     private_key: int) -> bool:
+        """Create and submit a state-changing contract call transaction"""
+        try:
+            # Check balance and get spendable outputs
+            balance = await self.check_balance(sender_address)
+            print(f"💰 Account balance: {balance} STE")
+            
+            if balance <= 0:
+                print("❌ Insufficient balance for transaction")
+                return False
+            
+            spendable_outputs = await self.get_spendable_outputs(sender_address)
+            if not spendable_outputs:
+                print("❌ No spendable outputs found")
+                return False
+            
+            total_available = sum(Decimal(output['amount']) for output in spendable_outputs)
+            print(f"💰 Total spendable: {total_available} STE")
+            
+            # Calculate fees
+            fee_amount = Decimal('0.001')
+            change_amount = total_available - fee_amount
+            
+            if change_amount <= 0:
+                print("❌ Insufficient balance for fees")
+                return False
+            
+            # Create transaction inputs
+            inputs = []
+            input_amount = Decimal('0')
+            
+            for output in spendable_outputs:
+                if input_amount < fee_amount:
+                    tx_input = TransactionInput(
+                        input_tx_hash=output['tx_hash'],
+                        index=output['index'],
+                        private_key=private_key,
+                        amount=Decimal(output['amount'])
+                    )
+                    inputs.append(tx_input)
+                    input_amount += Decimal(output['amount'])
+                else:
+                    break
+            
+            # Create change output
+            outputs = []
+            if change_amount > 0:
+                change_output = TransactionOutput(sender_address, change_amount)
+                outputs.append(change_output)
+            
+            # Get gas limit
+            gas_limit = input("Gas limit (press Enter for default 100000): ").strip()
+            gas_limit = int(gas_limit) if gas_limit else 100000
+            
+            # Create smart contract call transaction
+            sc_transaction = SmartContractTransaction(
+                inputs=inputs,
+                outputs=outputs,
+                operation_type=SmartContractTransaction.OPERATION_CALL,
+                contract_address=contract_address,
+                method_name=method_name,
+                method_args=method_args,
+                gas_limit=gas_limit
+            )
+            
+            # Sign the transaction
+            sc_transaction.sign([private_key])
+            
+            print("✅ Transaction created and signed")
+            
+            # Submit to network
+            print("📡 Submitting to network...")
+            
+            call_data = {
+                "transaction_hex": sc_transaction.hex()
+            }
+            
+            async with self.session.post(f"{self.node_url}/call_contract", 
+                                       json=call_data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get('ok'):
+                        print("✅ Contract call submitted successfully!")
+                        print(f"🔗 Transaction Hash: {sc_transaction.hash()}")
+                        if result.get('result'):
+                            print(f"📤 Result: {result['result']}")
+                        return True
+                    else:
+                        print(f"❌ Contract call failed: {result.get('error', 'Unknown error')}")
+                        return False
+                else:
+                    print(f"❌ HTTP error: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"❌ Transaction creation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
     async def run(self):
         """Main execution loop"""
-        print("Initializing Stellaris Contract Deployer...")
+        print("Initializing Stellaris Contract Manager...")
         
         if not await self.initialize():
             return
@@ -533,63 +819,169 @@ class ContractDeployer:
             while True:
                 self.display_menu()
                 
-                choice = input("\nSelect contract to deploy (0 to exit): ").strip()
+                choice = input("\nSelect action (D/C/L/0): ").strip().upper()
                 
                 if choice == "0":
                     print("👋 Goodbye!")
                     break
-                
-                if choice not in self.contracts:
+                elif choice == "D":
+                    await self.handle_deployment()
+                elif choice == "C":
+                    await self.handle_contract_call()
+                elif choice == "L":
+                    self.handle_list_contracts()
+                else:
                     print("❌ Invalid selection. Please try again.")
                     continue
-                
-                contract_info = self.contracts[choice]
-                
-                # Get wallet credentials
-                credentials = self.get_wallet_credentials()
-                if not credentials:
-                    print("❌ Could not get wallet credentials")
-                    continue
-                
-                address, private_key = credentials
-                
-                # Get deployment parameters
-                params = self.get_deployment_parameters(contract_info)
-                if not params:
-                    continue
-                
-                # Confirm deployment
-                print(f"\n📋 DEPLOYMENT SUMMARY")
-                print("-" * 30)
-                print(f"Contract: {contract_info['name']}")
-                print(f"From Address: {address}")
-                print(f"Parameters: {params}")
-                
-                confirm = input("\nProceed with deployment? (y/n): ").lower()
-                if confirm != 'y':
-                    print("❌ Deployment cancelled")
-                    continue
-                
-                try:
-                    # Deploy the contract
-                    success = await self.deploy_contract(contract_info, params, address, private_key)
-                    
-                    if success:
-                        print("\n🎉 Deployment completed successfully!")
-                    else:
-                        print("\n💥 Deployment failed!")
-                    
-                    input("\nPress Enter to continue...")
-                    
-                except Exception as e:
-                    print(f"\n❌ Deployment error: {e}")
-                    input("Press Enter to continue...")
                     
         except KeyboardInterrupt:
             print("\n\n👋 Goodbye!")
         finally:
             # Clean up resources
             await self.close()
+    
+    async def handle_deployment(self):
+        """Handle contract deployment workflow"""
+        while True:
+            self.display_deploy_menu()
+            
+            choice = input("\nSelect contract to deploy (0 to back): ").strip()
+            
+            if choice == "0":
+                break
+            
+            if choice not in self.contracts:
+                print("❌ Invalid selection. Please try again.")
+                continue
+            
+            contract_info = self.contracts[choice]
+            
+            # Get wallet credentials
+            credentials = self.get_wallet_credentials()
+            if not credentials:
+                print("❌ Could not get wallet credentials")
+                continue
+            
+            address, private_key = credentials
+            
+            # Get deployment parameters
+            params = self.get_deployment_parameters(contract_info)
+            if not params:
+                continue
+            
+            # Confirm deployment
+            print(f"\n📋 DEPLOYMENT SUMMARY")
+            print("-" * 30)
+            print(f"Contract: {contract_info['name']}")
+            print(f"From Address: {address}")
+            print(f"Parameters: {params}")
+            
+            confirm = input("\nProceed with deployment? (y/n): ").lower()
+            if confirm != 'y':
+                print("❌ Deployment cancelled")
+                continue
+            
+            try:
+                # Deploy the contract
+                success = await self.deploy_contract(contract_info, params, address, private_key)
+                
+                if success:
+                    print("\n🎉 Deployment completed successfully!")
+                else:
+                    print("\n💥 Deployment failed!")
+                
+                input("\nPress Enter to continue...")
+                break
+                
+            except Exception as e:
+                print(f"\n❌ Deployment error: {e}")
+                input("Press Enter to continue...")
+                break
+    
+    async def handle_contract_call(self):
+        """Handle contract call workflow"""
+        # Load deployed contracts
+        deployments = self.load_deployed_contracts()
+        if not deployments:
+            print("📭 No deployed contracts found")
+            print("💡 Deploy a contract first using the 'D' option")
+            input("Press Enter to continue...")
+            return
+        
+        # Select contract
+        selected_contract = self.select_deployed_contract(deployments)
+        if not selected_contract:
+            return
+        
+        contract_address = selected_contract['contract_address']
+        contract_name = selected_contract['contract_name']
+        source_file = selected_contract.get('source_file', '')
+        
+        print(f"\n🎯 Selected: {contract_name}")
+        print(f"📍 Address: {contract_address}")
+        
+        # Get available methods
+        available_methods = self.get_contract_methods(source_file)
+        if available_methods:
+            print(f"\n📋 Available methods: {', '.join(available_methods)}")
+        else:
+            print("⚠️  Could not auto-detect methods from source file")
+        
+        # Get method name
+        method_name = input("\nEnter method name to call: ").strip()
+        if not method_name:
+            print("❌ Method name is required")
+            return
+        
+        # Get method parameters
+        method_args, is_view = self.get_call_parameters(method_name)
+        
+        # Get wallet credentials for calling
+        credentials = self.get_wallet_credentials()
+        if not credentials:
+            print("❌ Could not get wallet credentials")
+            return
+        
+        sender_address, private_key = credentials
+        
+        # Confirm call
+        print(f"\n� CALL SUMMARY")
+        print("-" * 25)
+        print(f"Contract: {contract_name}")
+        print(f"Address: {contract_address}")
+        print(f"Method: {method_name}")
+        print(f"Arguments: {method_args}")
+        print(f"Sender: {sender_address}")
+        print(f"Type: {'View (read-only)' if is_view else 'State-changing'}")
+        
+        confirm = input("\nProceed with call? (y/n): ").lower()
+        if confirm != 'y':
+            print("❌ Call cancelled")
+            return
+        
+        try:
+            # Call the contract method
+            success = await self.call_contract_method(
+                contract_address, method_name, method_args, is_view,
+                sender_address, private_key
+            )
+            
+            if success:
+                print("\n🎉 Contract call completed successfully!")
+            else:
+                print("\n💥 Contract call failed!")
+            
+            input("\nPress Enter to continue...")
+            
+        except Exception as e:
+            print(f"\n❌ Contract call error: {e}")
+            input("Press Enter to continue...")
+    
+    def handle_list_contracts(self):
+        """Handle listing deployed contracts"""
+        deployments = self.load_deployed_contracts()
+        self.display_deployed_contracts(deployments)
+        input("\nPress Enter to continue...")
 
 
 async def main():
@@ -599,10 +991,11 @@ async def main():
 
 
 if __name__ == "__main__":
-    print("🌟 Stellaris Smart Contract Deployer")
-    print("====================================")
+    print("🌟 Stellaris Smart Contract Manager")
+    print("===================================")
     print(f"📡 Node URL: {os.getenv('NODE_HOST', 'localhost')}:{os.getenv('NODE_PORT', '3006')}")
     print("💡 Use NODE_HOST and NODE_PORT environment variables to change endpoint")
+    print("🔧 Features: Deploy contracts | Call contract methods | List deployments")
     print()
     
     try:

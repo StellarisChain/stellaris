@@ -70,11 +70,24 @@ class Database:
             await Database.create()
         return Database.instance
 
+    async def _save_to_file_unlocked(self, file_path: Path, data):
+        """Save data to compressed JSON file without acquiring lock (lock should already be held)"""
+        with gzip.open(file_path, 'wt', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, default=str)
+
     async def _save_to_file(self, file_path: Path, data):
         """Save data to compressed JSON file"""
-        async with self._lock:
-            with gzip.open(file_path, 'wt', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, default=str)
+        try:
+            await asyncio.wait_for(self._lock.acquire(), timeout=5.0)
+            try:
+                with gzip.open(file_path, 'wt', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2, default=str)
+            finally:
+                self._lock.release()
+        except asyncio.TimeoutError:
+            raise Exception(f"Database deadlock detected for {file_path}")
+        except Exception as e:
+            raise
 
     async def _load_from_file(self, file_path: Path):
         """Load data from compressed JSON file"""
@@ -915,11 +928,12 @@ class Database:
     
     async def _save_contracts(self):
         """Save contract data to file"""
-        await self._save_to_file(self.contracts_file, self._contracts)
+        # Note: Lock should already be held by caller
+        await self._save_to_file_unlocked(self.contracts_file, self._contracts)
     
     async def _save_contract_storage(self):
         """Save contract storage to file"""
-        await self._save_to_file(self.contract_storage_file, self._contract_storage)
+        await self._save_to_file_unlocked(self.contract_storage_file, self._contract_storage)
     
     async def save_contract_state(self, contract_address: str, state_data: dict):
         """Save contract state to database"""

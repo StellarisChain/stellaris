@@ -589,7 +589,7 @@ async def deploy_contract(request: Request, data: dict = Body(...)):
             tx_hash = sc_transaction.hash()
             
             # Add transaction to pending pool
-            await db.add_pending_transaction(tx_hex)
+            await db.add_pending_transaction(sc_transaction)
             
             # Calculate gas fee
             gas_fee = sc_transaction.calculate_gas_fee()
@@ -675,7 +675,7 @@ async def call_contract(request: Request, data: dict = Body(...)):
             tx_hash = sc_transaction.hash()
             
             # Add transaction to pending pool
-            await db.add_pending_transaction(tx_hex)
+            await db.add_pending_transaction(sc_transaction)
             
             # Calculate gas fee
             gas_fee = sc_transaction.calculate_gas_fee()
