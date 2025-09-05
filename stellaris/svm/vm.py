@@ -364,10 +364,10 @@ class StellarisVM:
             execution_env = self._create_execution_environment(contract_address)
             exec(contract_state.code, execution_env)
             
-            # Find the contract class
+            # Find the contract class (exclude SmartContract base class itself)
             contract_class = None
             for name, obj in execution_env.items():
-                if isinstance(obj, type) and issubclass(obj, SmartContract):
+                if isinstance(obj, type) and issubclass(obj, SmartContract) and obj is not SmartContract:
                     contract_class = obj
                     break
             
@@ -458,7 +458,7 @@ class StellarisVM:
                 
                 contract_class = None
                 for name, obj in execution_env.items():
-                    if isinstance(obj, type) and issubclass(obj, SmartContract):
+                    if isinstance(obj, type) and issubclass(obj, SmartContract) and obj is not SmartContract:
                         contract_class = obj
                         break
                 
