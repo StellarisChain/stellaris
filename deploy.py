@@ -497,7 +497,7 @@ class ContractDeployer:
                         print(f"🔗 Transaction Hash: {sc_transaction.hash()}")
                         
                         # Save deployment info
-                        self._save_deployment_info(contract_info, deployment_address, sc_transaction.hash(), params)
+                        self._save_deployment_info(contract_info, result.get("result").get("contract_address"), sc_transaction.hash(), params)
                         return True
                     else:
                         print(f"❌ Deployment failed: {result.get('error', 'Unknown error')}")
