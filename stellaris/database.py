@@ -21,6 +21,27 @@ OLD_BLOCKS_TRANSACTIONS_ORDER = pickledb.load(dir_path + '/old_block_transaction
 class Database:
     instance = None
     
+    async def _parse_transaction_from_hex(self, tx_hex: str, check_signatures: bool = True) -> Transaction:
+        """
+        Parse a transaction from hex, handling both regular and smart contract transactions.
+        """
+        try:
+            # Check if this is a smart contract transaction (version 4)
+            clean_hex = tx_hex[2:] if tx_hex.startswith('0x') else tx_hex
+            tx_bytes = bytes.fromhex(clean_hex)
+            version = int.from_bytes(tx_bytes[:1], 'big')
+            
+            if version == 4:
+                # This is a smart contract transaction
+                from stellaris.transactions.smart_contract_transaction import SmartContractTransaction
+                return await SmartContractTransaction.from_hex(tx_hex, check_signatures)
+            else:
+                # Regular transaction
+                return await Transaction.from_hex(tx_hex, check_signatures)
+        except Exception:
+            # Fallback to regular transaction parsing
+            return await Transaction.from_hex(tx_hex, check_signatures)
+    
     def __init__(self):
         self.data_dir = None
         self.blocks_file = None
@@ -425,14 +446,14 @@ class Database:
             return None
         
         tx_data = self._pending_transactions[tx_hash]
-        return await Transaction.from_hex(tx_data['tx_hex'], check_signatures)
+        return await self._parse_transaction_from_hex(tx_data['tx_hex'], check_signatures)
 
     async def get_pending_transactions_by_hash(self, hashes: List[str], check_signatures: bool = True) -> List[Transaction]:
         result = []
         for tx_hash in hashes:
             if tx_hash in self._pending_transactions:
                 tx_data = self._pending_transactions[tx_hash]
-                result.append(await Transaction.from_hex(tx_data['tx_hex'], check_signatures))
+                result.append(await self._parse_transaction_from_hex(tx_data['tx_hex'], check_signatures))
         return result
 
     async def get_transactions(self, tx_hashes: List[str]):

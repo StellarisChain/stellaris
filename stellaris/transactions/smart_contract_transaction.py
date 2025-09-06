@@ -318,3 +318,14 @@ class SmartContractTransaction(Transaction):
     def is_call(self) -> bool:
         """Check if this is a contract call transaction"""
         return self.operation_type == self.OPERATION_CALL
+    
+    def _verify_outputs(self):
+        """Override output verification for smart contract transactions"""
+        # Smart contract transactions may have no outputs (for deployment with no funding)
+        # or they may have outputs for funding/change
+        if not self.outputs:
+            # Empty outputs are valid for smart contract transactions
+            return True
+        else:
+            # If outputs exist, they must all be valid
+            return all(tx_output.verify() for tx_output in self.outputs)
