@@ -589,7 +589,14 @@ async def deploy_contract(request: Request, data: dict = Body(...)):
             tx_hash = sc_transaction.hash()
             
             # Add transaction to pending pool
-            await db.add_pending_transaction(sc_transaction)
+            tx_added = await db.add_pending_transaction(sc_transaction)
+            
+            if not tx_added:
+                return {
+                    'ok': False,
+                    'error': 'Failed to add transaction to pending pool - transaction verification failed',
+                    'gas_used': result.gas_used
+                }
             
             # Calculate gas fee
             gas_fee = sc_transaction.calculate_gas_fee()
@@ -675,7 +682,14 @@ async def call_contract(request: Request, data: dict = Body(...)):
             tx_hash = sc_transaction.hash()
             
             # Add transaction to pending pool
-            await db.add_pending_transaction(sc_transaction)
+            tx_added = await db.add_pending_transaction(sc_transaction)
+            
+            if not tx_added:
+                return {
+                    'ok': False,
+                    'error': 'Failed to add transaction to pending pool - transaction verification failed',
+                    'gas_used': result.gas_used
+                }
             
             # Calculate gas fee
             gas_fee = sc_transaction.calculate_gas_fee()
