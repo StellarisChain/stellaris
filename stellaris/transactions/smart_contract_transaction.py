@@ -54,7 +54,7 @@ class SmartContractTransaction(Transaction):
         self.contract_code = contract_code or ""
         self.method_name = method_name or ""
         self.method_args = method_args or []
-        self.gas_limit = gas_limit
+        self.gas_limit = int(gas_limit) if gas_limit else 100000
         self.gas_used = 0
         self.execution_result = None
         self.execution_error = None
@@ -101,8 +101,13 @@ class SmartContractTransaction(Transaction):
             'gas_limit': self.gas_limit
         }
         
-        # Serialize contract data
-        contract_data_json = json.dumps(contract_data, separators=(',', ':'))
+        # Serialize contract data with Decimal support
+        def decimal_default(obj):
+            if isinstance(obj, Decimal):
+                return {'__decimal__': str(obj)}
+            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+        
+        contract_data_json = json.dumps(contract_data, separators=(',', ':'), default=decimal_default)
         contract_data_bytes = contract_data_json.encode('utf-8')
         
         # Add length prefix and contract data
@@ -182,7 +187,16 @@ class SmartContractTransaction(Transaction):
             try:
                 contract_data_len = int.from_bytes(data_stream.read(4), ENDIAN)
                 contract_data_bytes = data_stream.read(contract_data_len)
-                contract_data = json.loads(contract_data_bytes.decode('utf-8'))
+                
+                def decimal_hook(dct):
+                    for key, value in dct.items():
+                        if isinstance(value, dict) and '__decimal__' in value:
+                            dct[key] = Decimal(value['__decimal__'])
+                        elif isinstance(value, list):
+                            dct[key] = [Decimal(item['__decimal__']) if isinstance(item, dict) and '__decimal__' in item else item for item in value]
+                    return dct
+                
+                contract_data = json.loads(contract_data_bytes.decode('utf-8'), object_hook=decimal_hook)
                 
                 # Create smart contract transaction with the parsed inputs and outputs
                 sc_tx = cls(
@@ -193,7 +207,7 @@ class SmartContractTransaction(Transaction):
                     contract_code=contract_data.get('contract_code', ''),
                     method_name=contract_data.get('method_name', ''),
                     method_args=contract_data.get('method_args', []),
-                    gas_limit=contract_data.get('gas_limit', 100000)
+                    gas_limit=int(contract_data.get('gas_limit', 100000))
                 )
                 
                 sc_tx._hex = hex_string
@@ -209,12 +223,20 @@ class SmartContractTransaction(Transaction):
             # Work backwards from the end to find JSON contract data
             for i in range(len(all_data) - 4, 0, -1):
                 try:
-                    potential_len = int.from_bytes(all_data[i:i+4], ENDIAN)
+                    potential_len: int = int.from_bytes(all_data[i:i+4], ENDIAN)
                     if potential_len > 0 and i + 4 + potential_len <= len(all_data):
                         contract_data_bytes = all_data[i+4:i+4+potential_len]
                         contract_data_str = contract_data_bytes.decode('utf-8')
                         if contract_data_str.startswith('{') and contract_data_str.endswith('}'):
-                            contract_data = json.loads(contract_data_str)
+                            def decimal_hook(dct):
+                                for key, value in dct.items():
+                                    if isinstance(value, dict) and '__decimal__' in value:
+                                        dct[key] = Decimal(value['__decimal__'])
+                                    elif isinstance(value, list):
+                                        dct[key] = [Decimal(item['__decimal__']) if isinstance(item, dict) and '__decimal__' in item else item for item in value]
+                                return dct
+                            
+                            contract_data = json.loads(contract_data_str, object_hook=decimal_hook)
                             
                             # Create smart contract transaction with the parsed inputs and outputs
                             sc_tx = cls(
@@ -225,7 +247,7 @@ class SmartContractTransaction(Transaction):
                                 contract_code=contract_data.get('contract_code', ''),
                                 method_name=contract_data.get('method_name', ''),
                                 method_args=contract_data.get('method_args', []),
-                                gas_limit=contract_data.get('gas_limit', 100000)
+                                gas_limit=int(contract_data.get('gas_limit', 100000))
                             )
                             
                             sc_tx._hex = hex_string

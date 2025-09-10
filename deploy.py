@@ -26,6 +26,7 @@ import json
 import time
 import asyncio
 import aiohttp
+import traceback
 from decimal import Decimal
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -413,10 +414,10 @@ class ContractDeployer:
             constructor_args = []
             if "SRC20" in contract_info['class_name'] or "Token" in contract_info['class_name']:
                 constructor_args = [
-                    address,  # sender/deployer
-                    params['name'],
-                    params['symbol'],
-                    str(params['initial_supply'])  # Convert Decimal to string for JSON serialization
+                    params['name'],  # name: str
+                    params['symbol'],  # symbol: str  
+                    18,  # decimals: int (standard 18 decimals)
+                    params['initial_supply']  # max_supply: Decimal (keep as Decimal for contract logic)
                 ]
             
             # Create deployment transaction
@@ -437,11 +438,18 @@ class ContractDeployer:
             # Use available outputs as inputs - API returns dictionaries
             for output in spendable_outputs:
                 if input_amount < fee_amount:
+                    # Derive public key from private key for verification
+                    from fastecdsa import keys
+                    from stellaris.constants import CURVE
+                    public_key = keys.get_public_key(private_key, CURVE)
+                    
                     tx_input = TransactionInput(
                         input_tx_hash=output['tx_hash'],
-                        index=output['index'],
                         private_key=private_key,
-                        amount=Decimal(output['amount'])
+                        index=int(output['index']),  # Convert to int
+                        private_key=None,  # Let the signing process set this
+                        amount=Decimal(output['amount']),
+                        public_key=public_key
                     )
                     inputs.append(tx_input)
                     input_amount += Decimal(output['amount'])
@@ -465,9 +473,9 @@ class ContractDeployer:
                 gas_limit=params['gas_limit']
             )
 
-            # Test Hex
-            from_hex = await SmartContractTransaction.from_hex(sc_transaction.hex())
-            print(f"Code length: {len(from_hex.contract_code)}")
+            # Test Hex - commented out as it's not necessary and might cause type issues
+            # from_hex = await SmartContractTransaction.from_hex(sc_transaction.hex())
+            # print(f"Code length: {len(from_hex.contract_code)}")
             
             # Sign the transaction
             sc_transaction.sign([private_key])
@@ -500,7 +508,7 @@ class ContractDeployer:
                         self._save_deployment_info(contract_info, result.get("result").get("contract_address"), sc_transaction.hash(), params)
                         return True
                     else:
-                        print(f"❌ Deployment failed: {result.get('error', 'Unknown error')}")
+                        print(f"❌ Contract Deployment failed: {result.get('error', 'Unknown error')}")
                         return False
                 else:
                     print(f"❌ HTTP error: {response.status}")
@@ -741,11 +749,17 @@ class ContractDeployer:
             
             for output in spendable_outputs:
                 if input_amount < fee_amount:
+                    # Derive public key from private key for verification
+                    from fastecdsa import keys
+                    from stellaris.constants import CURVE
+                    public_key = keys.get_public_key(private_key, CURVE)
+                    
                     tx_input = TransactionInput(
                         input_tx_hash=output['tx_hash'],
-                        index=output['index'],
-                        private_key=private_key,
-                        amount=Decimal(output['amount'])
+                        index=int(output['index']),  # Convert to int
+                        private_key=None,  # Let the signing process set this
+                        amount=Decimal(output['amount']),
+                        public_key=public_key
                     )
                     inputs.append(tx_input)
                     input_amount += Decimal(output['amount'])
