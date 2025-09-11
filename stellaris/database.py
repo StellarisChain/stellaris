@@ -160,9 +160,11 @@ class Database:
 
     async def add_pending_transaction(self, transaction: Transaction, verify: bool = True):
         if isinstance(transaction, CoinbaseTransaction):
+            print(f"Debug: {transaction}")
             return False
         tx_hex = transaction.hex()
         if verify and not await transaction.verify_pending():
+            print(f"Debug: Verification failed {tx_hex}")
             return False
         
         tx_hash = sha256(tx_hex)
