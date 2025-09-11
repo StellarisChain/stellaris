@@ -547,7 +547,7 @@ class ContractDeployer:
                     result = await response.json()
                     if result.get('ok'):
                         print("✅ Contract deployment submitted successfully!")
-                        print(f"📍 Contract Address: {deployment_address}")
+                        print(f"📍 Contract Address: {result.get("result").get("contract_address")}")
                         print(f"🔗 Transaction Hash: {sc_transaction.hash()}")
                         
                         # Save deployment info

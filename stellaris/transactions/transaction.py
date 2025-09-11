@@ -148,6 +148,7 @@ class Transaction:
         await self._fill_transaction_inputs()
 
         if not await self._check_signature():
+            print('invalid signature')
             return False
 
         if not self._verify_outputs():
@@ -249,8 +250,8 @@ class Transaction:
         clean_hex = hexstring[2:] if hexstring.startswith('0x') else hexstring
         tx_bytes = BytesIO(bytes.fromhex(clean_hex))
         version = int.from_bytes(tx_bytes.read(1), ENDIAN)
-        if version > 3:
-            raise NotImplementedError()
+        #if version > 3:
+        #    raise NotImplementedError()
 
         inputs_count = int.from_bytes(tx_bytes.read(1), ENDIAN)
 
