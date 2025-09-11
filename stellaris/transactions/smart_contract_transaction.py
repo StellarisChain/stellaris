@@ -71,25 +71,9 @@ class SmartContractTransaction(Transaction):
     
     def hex(self, full: bool = True, prefix = False):
         """Generate hex representation of transaction"""
-        # Basic transaction structure for smart contracts
-        inputs_hex = ''.join(tx_input.tobytes().hex() for tx_input in self.inputs)
-        outputs_hex = ''.join(tx_output.tobytes().hex() for tx_output in self.outputs)
-        
-        message_hex = ''
-        if self.message:
-            message_hex = len(self.message).to_bytes(4, ENDIAN).hex() + self.message.hex()
-        else:
-            message_hex = (0).to_bytes(4, ENDIAN).hex()
-        
-        # Base transaction hex
-        base_hex = ''.join([
-            self.version.to_bytes(1, ENDIAN).hex(),
-            len(self.inputs).to_bytes(1, ENDIAN).hex(),
-            inputs_hex,
-            len(self.outputs).to_bytes(1, ENDIAN).hex(), 
-            outputs_hex,
-            message_hex
-        ])
+        # Use the parent class hex method for base transaction structure
+        # which includes proper signature handling
+        base_hex = super().hex(full)
         
         # Add smart contract specific data
         contract_data = {
@@ -127,107 +111,25 @@ class SmartContractTransaction(Transaction):
         # Remove 0x prefix if present
         clean_hex = hex_string[2:] if hex_string.startswith('0x') else hex_string
         
-        # Extract basic transaction data
-        hex_bytes = bytes.fromhex(clean_hex)
-        data_stream = BytesIO(hex_bytes)
-        
         try:
-            # Parse regular transaction data first
-            version = int.from_bytes(data_stream.read(1), ENDIAN)
+            # First we need to separate the base transaction hex from the contract data
+            hex_bytes = bytes.fromhex(clean_hex)
             
-            # Parse inputs properly
-            input_count = int.from_bytes(data_stream.read(1), ENDIAN)
-            inputs = []
-            for _ in range(input_count):
-                # Parse each input - this is simplified but should work for basic cases
-                # tx_hash (32 bytes), index (1 byte), then skip signature data
-                tx_hash = data_stream.read(32).hex()
-                index = int.from_bytes(data_stream.read(1), ENDIAN)
-                
-                # Create a basic TransactionInput (without private key for parsing)
-                tx_input = TransactionInput(tx_hash, index)
-                inputs.append(tx_input)
-                
-                # Skip signature data - find signature length and skip it
-                # This is a simplified approach - we're just trying to get past the signature
+            # Find the contract data by looking for the length prefix at the end
+            # The contract data format is: [4-byte length][contract data JSON]
+            contract_data = None
+            base_transaction_bytes = hex_bytes
+            
+            # Try to find contract data at the end
+            for i in range(len(hex_bytes) - 4, 0, -1):
                 try:
-                    sig_len = int.from_bytes(data_stream.read(1), ENDIAN)
-                    data_stream.read(sig_len)
-                except:
-                    # If we can't read signature properly, try to find the next part
-                    break
-            
-            # Parse outputs properly
-            output_count = int.from_bytes(data_stream.read(1), ENDIAN)
-            outputs = []
-            for _ in range(output_count):
-                try:
-                    # Parse each output - amount (8 bytes), then address
-                    amount_bytes = data_stream.read(8)
-                    amount = Decimal(str(int.from_bytes(amount_bytes, ENDIAN))) / Decimal('1000000')
-                    
-                    # Address length and address
-                    addr_len = int.from_bytes(data_stream.read(1), ENDIAN)
-                    address = data_stream.read(addr_len).decode('utf-8')
-                    
-                    tx_output = TransactionOutput(address, amount)
-                    outputs.append(tx_output)
-                except:
-                    # If we can't parse outputs properly, continue
-                    break
-            
-            # Skip message
-            try:
-                msg_len = int.from_bytes(data_stream.read(4), ENDIAN)
-                data_stream.read(msg_len)
-            except:
-                pass
-            
-            # Parse smart contract data
-            try:
-                contract_data_len = int.from_bytes(data_stream.read(4), ENDIAN)
-                contract_data_bytes = data_stream.read(contract_data_len)
-                
-                def decimal_hook(dct):
-                    for key, value in dct.items():
-                        if isinstance(value, dict) and '__decimal__' in value:
-                            dct[key] = Decimal(value['__decimal__'])
-                        elif isinstance(value, list):
-                            dct[key] = [Decimal(item['__decimal__']) if isinstance(item, dict) and '__decimal__' in item else item for item in value]
-                    return dct
-                
-                contract_data = json.loads(contract_data_bytes.decode('utf-8'), object_hook=decimal_hook)
-                
-                # Create smart contract transaction with the parsed inputs and outputs
-                sc_tx = cls(
-                    inputs=inputs,
-                    outputs=outputs,
-                    operation_type=contract_data.get('operation_type', cls.OPERATION_DEPLOY),
-                    contract_address=contract_data.get('contract_address', ''),
-                    contract_code=contract_data.get('contract_code', ''),
-                    method_name=contract_data.get('method_name', ''),
-                    method_args=contract_data.get('method_args', []),
-                    gas_limit=int(contract_data.get('gas_limit', 100000))
-                )
-                
-                sc_tx._hex = hex_string
-                return sc_tx
-            except Exception as e:
-                # If contract data parsing fails, try the fallback approach
-                pass
-            
-            # Fallback: try to find contract data at the end
-            data_stream.seek(0)
-            all_data = data_stream.read()
-            
-            # Work backwards from the end to find JSON contract data
-            for i in range(len(all_data) - 4, 0, -1):
-                try:
-                    potential_len: int = int.from_bytes(all_data[i:i+4], ENDIAN)
-                    if potential_len > 0 and i + 4 + potential_len <= len(all_data):
-                        contract_data_bytes = all_data[i+4:i+4+potential_len]
+                    potential_len = int.from_bytes(hex_bytes[i:i+4], ENDIAN)
+                    if potential_len > 0 and i + 4 + potential_len == len(hex_bytes):
+                        # This looks like a valid contract data length at the end
+                        contract_data_bytes = hex_bytes[i+4:i+4+potential_len]
                         contract_data_str = contract_data_bytes.decode('utf-8')
                         if contract_data_str.startswith('{') and contract_data_str.endswith('}'):
+                            # Found valid JSON contract data
                             def decimal_hook(dct):
                                 for key, value in dct.items():
                                     if isinstance(value, dict) and '__decimal__' in value:
@@ -237,29 +139,103 @@ class SmartContractTransaction(Transaction):
                                 return dct
                             
                             contract_data = json.loads(contract_data_str, object_hook=decimal_hook)
-                            
-                            # Create smart contract transaction with the parsed inputs and outputs
-                            sc_tx = cls(
-                                inputs=inputs,
-                                outputs=outputs,
-                                operation_type=contract_data.get('operation_type', cls.OPERATION_DEPLOY),
-                                contract_address=contract_data.get('contract_address', ''),
-                                contract_code=contract_data.get('contract_code', ''),
-                                method_name=contract_data.get('method_name', ''),
-                                method_args=contract_data.get('method_args', []),
-                                gas_limit=int(contract_data.get('gas_limit', 100000))
-                            )
-                            
-                            sc_tx._hex = hex_string
-                            return sc_tx
+                            # Remove contract data from base transaction
+                            base_transaction_bytes = hex_bytes[:i]
+                            break
                 except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
                     continue
             
-            # If we couldn't parse the contract data, raise an error
-            raise ValueError("Could not parse smart contract data from hex")
+            if contract_data is None:
+                raise ValueError("Could not parse smart contract data from hex")
+            
+            # Now parse the base transaction manually (since it's version 4)
+            tx_bytes = BytesIO(base_transaction_bytes)
+            
+            # Parse version
+            version = int.from_bytes(tx_bytes.read(1), ENDIAN)
+            if version != 4:
+                raise ValueError(f"Expected version 4, got {version}")
+            
+            # Parse inputs (just tx_hash and index, signatures come later)
+            inputs_count = int.from_bytes(tx_bytes.read(1), ENDIAN)
+            inputs = []
+            
+            for i in range(inputs_count):
+                tx_hex = tx_bytes.read(32).hex()
+                tx_index = int.from_bytes(tx_bytes.read(1), ENDIAN)
+                inputs.append(TransactionInput(tx_hex, index=tx_index))
+            
+            # Parse outputs
+            outputs_count = int.from_bytes(tx_bytes.read(1), ENDIAN)
+            outputs = []
+            
+            for i in range(outputs_count):
+                # Read address (33 bytes for version > 1)
+                pubkey_bytes = tx_bytes.read(33)
+                from stellaris.utils.general import bytes_to_string
+                address = bytes_to_string(pubkey_bytes)
+                
+                # Read amount length and amount
+                amount_length = int.from_bytes(tx_bytes.read(1), ENDIAN)
+                amount_int = int.from_bytes(tx_bytes.read(amount_length), ENDIAN)
+                amount = Decimal(str(amount_int)) / Decimal('1000000')
+                
+                outputs.append(TransactionOutput(address, amount))
+            
+            # Parse message
+            message_specifier = int.from_bytes(tx_bytes.read(1), ENDIAN)
+            if message_specifier == 1:
+                if version <= 2:
+                    message_length = int.from_bytes(tx_bytes.read(1), ENDIAN)
+                else:
+                    message_length = int.from_bytes(tx_bytes.read(2), ENDIAN)
+                if message_length > 0:
+                    message = tx_bytes.read(message_length)
+                else:
+                    message = None
+            else:
+                message = None
+            
+            # Parse signatures (similar to Transaction.from_hex)
+            signatures = []
+            while True:
+                try:
+                    sig_r = int.from_bytes(tx_bytes.read(32), ENDIAN)
+                    sig_s = int.from_bytes(tx_bytes.read(32), ENDIAN)
+                    if sig_r == 0:
+                        break
+                    signatures.append((sig_r, sig_s))
+                except:
+                    break
+            
+            # Assign signatures to inputs (similar logic as Transaction.from_hex)
+            if len(signatures) == 1:
+                for tx_input in inputs:
+                    tx_input.signed = signatures[0]
+            elif len(inputs) == len(signatures):
+                for i, tx_input in enumerate(inputs):
+                    tx_input.signed = signatures[i]
+            
+            # Create smart contract transaction with the parsed data
+            sc_tx = cls(
+                inputs=inputs,
+                outputs=outputs,
+                operation_type=contract_data.get('operation_type', cls.OPERATION_DEPLOY),
+                contract_address=contract_data.get('contract_address', ''),
+                contract_code=contract_data.get('contract_code', ''),
+                method_name=contract_data.get('method_name', ''),
+                method_args=contract_data.get('method_args', []),
+                gas_limit=int(contract_data.get('gas_limit', 100000))
+            )
+            
+            # Set message if present
+            if message:
+                sc_tx.message = message
+            
+            return sc_tx
             
         except Exception as e:
-            raise ValueError(f"Invalid transaction hex: {e}")
+            raise ValueError(f"Invalid smart contract transaction hex: {e}")
     
     def hash(self) -> str:
         """Get transaction hash"""

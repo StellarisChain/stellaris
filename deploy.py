@@ -383,6 +383,11 @@ class ContractDeployer:
                             address: str, private_key: int) -> bool:
         """Deploy the smart contract"""
         try:
+            # Initialize database if not already done
+            from stellaris.database import Database
+            if not Database.instance:
+                Database.instance = await Database.create()
+            
             print(f"\n🚀 DEPLOYING {contract_info['name']}")
             print("-" * 40)
             
@@ -413,48 +418,63 @@ class ContractDeployer:
             # Prepare constructor arguments
             constructor_args = []
             if "SRC20" in contract_info['class_name'] or "Token" in contract_info['class_name']:
-                constructor_args = [
-                    params['name'],  # name: str
-                    params['symbol'],  # symbol: str  
-                    18,  # decimals: int (standard 18 decimals)
-                    params['initial_supply']  # max_supply: Decimal (keep as Decimal for contract logic)
-                ]
+                if contract_info['class_name'] == 'SRC20Token':  # Enhanced SRC20
+                    constructor_args = [
+                        params['name'],  # name: str
+                        params['symbol'],  # symbol: str  
+                        18,  # decimals: int (standard 18 decimals)
+                        params['initial_supply']  # max_supply: Decimal (the sender parameter is auto-provided by VM)
+                    ]
+                else:  # Simple SRC20
+                    constructor_args = [
+                        params['name'],  # name: str
+                        params['symbol'],  # symbol: str  
+                        18,  # decimals: int (standard 18 decimals)
+                        params['initial_supply']  # max_supply: Decimal
+                    ]
             
             # Create deployment transaction
             print("📝 Creating deployment transaction...")
             
             # Calculate fees (simplified)
             fee_amount = Decimal('0.001')  # Basic fee
-            change_amount = total_available - fee_amount
             
-            if change_amount <= 0:
-                print("❌ Insufficient balance for fees")
-                return False
-            
-            # Create transaction inputs and outputs
+            # Create transaction inputs - collect enough to cover fees
             inputs = []
             input_amount = Decimal('0')
             
             # Use available outputs as inputs - API returns dictionaries
             for output in spendable_outputs:
-                if input_amount < fee_amount:
+                # Collect inputs until we have enough to cover fees
+                if input_amount < fee_amount * 2:  # Collect a bit more than just the fee amount
                     # Derive public key from private key for verification
                     from fastecdsa import keys
                     from stellaris.constants import CURVE
                     public_key = keys.get_public_key(private_key, CURVE)
                     
+                    print(f"  Using UTXO: {output['tx_hash'][:16]}..., index: {output['index']}, amount: {output['amount']}")
+                    
                     tx_input = TransactionInput(
                         input_tx_hash=output['tx_hash'],
-                        private_key=private_key,
                         index=int(output['index']),  # Convert to int
-                        private_key=None,  # Let the signing process set this
+                        private_key=private_key,  # Set the private key directly
                         amount=Decimal(output['amount']),
                         public_key=public_key
                     )
                     inputs.append(tx_input)
                     input_amount += Decimal(output['amount'])
+                    
+                    print(f"  Input amount so far: {input_amount}")
                 else:
                     break
+            
+            # Check if we have enough inputs to cover fees
+            if input_amount < fee_amount:
+                print("❌ Insufficient balance for fees")
+                return False
+            
+            # Calculate change amount based on actual collected inputs
+            change_amount = input_amount - fee_amount
             
             # Create change output
             outputs = []
@@ -481,6 +501,26 @@ class ContractDeployer:
             sc_transaction.sign([private_key])
             
             print("✅ Transaction created and signed")
+            print(f"📊 Transaction details:")
+            print(f"   - Inputs: {len(sc_transaction.inputs)}")
+            print(f"   - Outputs: {len(sc_transaction.outputs)}")
+            print(f"   - Total input amount: {sum(inp.amount for inp in sc_transaction.inputs)}")
+            print(f"   - Total output amount: {sum(out.amount for out in sc_transaction.outputs)}")
+            print(f"   - Implied fee: {sum(inp.amount for inp in sc_transaction.inputs) - sum(out.amount for out in sc_transaction.outputs)}")
+            
+            # Test transaction verification before submitting
+            try:
+                print("🔍 Testing transaction verification...")
+                verification_result = await sc_transaction.verify(check_double_spend=True)
+                print(f"   - Verification result: {verification_result}")
+                if not verification_result:
+                    print("❌ Transaction failed local verification!")
+                    return False
+            except Exception as e:
+                print(f"❌ Transaction verification failed: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
             
             # Get deployment address
             deployment_address = self.builder.get_deployment_address(sc_transaction, address)
@@ -491,6 +531,12 @@ class ContractDeployer:
             
             # Submit transaction via deploy_contract API
             tx_hex = sc_transaction.hex()
+            print(f"🔍 Debug info before submission:")
+            print(f"   - Transaction hex length: {len(tx_hex)}")
+            print(f"   - Transaction hash: {sc_transaction.hash()}")
+            print(f"   - Input signatures: {[inp.signed is not None for inp in sc_transaction.inputs]}")
+            print(f"   - Hex preview: {tx_hex[:100]}...")
+            
             deploy_data = {
                 "transaction_hex": tx_hex
             }
@@ -719,6 +765,11 @@ class ContractDeployer:
                                      private_key: int) -> bool:
         """Create and submit a state-changing contract call transaction"""
         try:
+            # Initialize database if not already done
+            from stellaris.database import Database
+            if not Database.instance:
+                Database.instance = await Database.create()
+            
             # Check balance and get spendable outputs
             balance = await self.check_balance(sender_address)
             print(f"💰 Account balance: {balance} STE")
@@ -737,18 +788,14 @@ class ContractDeployer:
             
             # Calculate fees
             fee_amount = Decimal('0.001')
-            change_amount = total_available - fee_amount
             
-            if change_amount <= 0:
-                print("❌ Insufficient balance for fees")
-                return False
-            
-            # Create transaction inputs
+            # Create transaction inputs - collect enough to cover fees
             inputs = []
             input_amount = Decimal('0')
             
             for output in spendable_outputs:
-                if input_amount < fee_amount:
+                # Collect inputs until we have enough to cover fees 
+                if input_amount < fee_amount * 2:  # Collect a bit more than just the fee amount
                     # Derive public key from private key for verification
                     from fastecdsa import keys
                     from stellaris.constants import CURVE
@@ -757,7 +804,7 @@ class ContractDeployer:
                     tx_input = TransactionInput(
                         input_tx_hash=output['tx_hash'],
                         index=int(output['index']),  # Convert to int
-                        private_key=None,  # Let the signing process set this
+                        private_key=private_key,  # Set the private key directly
                         amount=Decimal(output['amount']),
                         public_key=public_key
                     )
@@ -765,6 +812,14 @@ class ContractDeployer:
                     input_amount += Decimal(output['amount'])
                 else:
                     break
+            
+            # Check if we have enough inputs to cover fees
+            if input_amount < fee_amount:
+                print("❌ Insufficient balance for fees")
+                return False
+            
+            # Calculate change amount based on actual collected inputs
+            change_amount = input_amount - fee_amount
             
             # Create change output
             outputs = []
