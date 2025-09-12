@@ -221,12 +221,12 @@ class StellarisVMManager:
             
             # Execute contract method
             result = vm.call_contract(
-                contract_address=transaction.contract_address,
-                method_name=transaction.method_name,
+                transaction.contract_address,
+                transaction.method_name,
+                *transaction.method_args,
                 sender=sender,
                 value=transaction.outputs[0].amount if transaction.outputs else Decimal('0'),
-                gas_limit=transaction.gas_limit,
-                *transaction.method_args
+                gas_limit=transaction.gas_limit
             )
             
             # Update transaction with results

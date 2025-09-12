@@ -28,7 +28,7 @@ class Transaction:
                 version = 3
             else:
                 raise NotImplementedError()
-        if version > 3:
+        if version > 4:
             raise NotImplementedError()
         self.version = version
         
