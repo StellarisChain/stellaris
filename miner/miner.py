@@ -61,7 +61,7 @@ def run(start: int = 0, step: int = 1, res: dict = None):
             if ((i := i + step) - start) % check == 0:
                 elapsed_time = time.time() - t
                 print(f'Worker {start + 1}: ' + str(int(i / step / elapsed_time / 1000)) + 'k hash/s')
-                if elapsed_time > 180:
+                if elapsed_time > 280:
                     found = False
                     break
         if found:

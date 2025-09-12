@@ -626,7 +626,7 @@ async def deploy_contract(request: Request, data: dict = Body(...)):
 @app.post("/call_contract")
 @limiter.limit("10/minute")
 async def call_contract(request: Request, data: dict = Body(...)):
-    """Call a smart contract method from hex transaction"""
+    """Call a smart contract method from hex transaction or direct view call"""
     global vm_manager
     
     if not VM_AVAILABLE:
@@ -636,10 +636,37 @@ async def call_contract(request: Request, data: dict = Body(...)):
         return {'ok': False, 'error': 'VM Manager not initialized'}
     
     try:
-        # Extract transaction hex
+        # Check if this is a view call (direct contract call without transaction)
+        if 'contract_address' in data and 'method_name' in data:
+            # This is a view call
+            contract_address = data.get('contract_address')
+            method_name = data.get('method_name')
+            method_args = data.get('method_args', [])
+            sender_address = data.get('sender_address', '0x0')
+            
+            # Validate contract exists
+            contract_exists = await db.contract_exists(contract_address)
+            if not contract_exists:
+                return {'ok': False, 'error': f'Contract not found at address {contract_address}'}
+            
+            # Execute view call
+            result = await vm_manager.call_view_method(contract_address, method_name, method_args, sender_address)
+            
+            if result.success:
+                return {
+                    'ok': True,
+                    'result': result.result
+                }
+            else:
+                return {
+                    'ok': False,
+                    'error': result.error
+                }
+        
+        # Otherwise, handle as transaction hex for state-changing calls
         tx_hex = data.get('transaction_hex')
         if not tx_hex:
-            return {'ok': False, 'error': 'transaction_hex is required'}
+            return {'ok': False, 'error': 'Either transaction_hex or contract_address/method_name is required'}
         
         # Validate hex format
         try:

@@ -379,6 +379,117 @@ class ContractDeployer:
             print(f"❌ Error getting spendable outputs: {e}")
             return []
     
+    async def _wait_for_confirmation(self, tx_hash: str, timeout: int = 300, poll_interval: int = 5) -> dict:
+        """
+        Wait for a transaction to be confirmed (included in a block) and return the transaction data.
+        
+        Args:
+            tx_hash: Transaction hash to monitor
+            timeout: Maximum time to wait in seconds (default: 5 minutes)
+            poll_interval: How often to check in seconds (default: 5 seconds)
+        
+        Returns:
+            Dictionary with confirmation status and transaction data, or None if failed
+        """
+        start_time = time.time()
+        
+        try:
+            while time.time() - start_time < timeout:
+                try:
+                    # Check transaction status
+                    async with self.session.get(f"{self.node_url}/get_transaction?tx_hash={tx_hash}") as response:
+                        if response.status == 200:
+                            result = await response.json()
+                            if result.get('ok') and result.get('result'):
+                                transaction_data = result['result']
+                                
+                                # If transaction has block_hash, it's confirmed
+                                if transaction_data.get('block_hash'):
+                                    return {
+                                        'confirmed': True,
+                                        'transaction_data': transaction_data
+                                    }
+                                    
+                                # If transaction is still pending, continue waiting
+                                print(f"⏳ Transaction still pending... ({int(time.time() - start_time)}s elapsed)")
+                            else:
+                                # Transaction not found - still checking if it's just not processed yet
+                                print(f"⏳ Transaction not found yet... ({int(time.time() - start_time)}s elapsed)")
+                        else:
+                            print(f"⚠️  HTTP error {response.status} while checking transaction status")
+                        
+                        # Wait before next check
+                        await asyncio.sleep(poll_interval)
+                        
+                except Exception as e:
+                    print(f"⚠️  Error checking transaction status: {e}")
+                    await asyncio.sleep(poll_interval)
+            
+            # Timeout reached
+            return {'confirmed': False, 'transaction_data': None}
+            
+        except Exception as e:
+            print(f"❌ Error in wait_for_confirmation: {e}")
+            return {'confirmed': False, 'transaction_data': None}
+    
+    def _display_transaction_results(self, tx_data: dict, method_name: str):
+        """Display the results of a confirmed transaction"""
+        try:
+            print("\n" + "="*50)
+            print("📊 TRANSACTION EXECUTION RESULTS")
+            print("="*50)
+            
+            # Basic transaction info
+            print(f"🔗 Transaction Hash: {tx_data.get('hash', 'N/A')}")
+            print(f"📦 Block Hash: {tx_data.get('block_hash', 'N/A')}")
+            print(f"📈 Block Number: {tx_data.get('block_number', 'N/A')}")
+            
+            # Gas usage
+            if 'gas_used' in tx_data:
+                print(f"⛽ Gas Used: {tx_data['gas_used']}")
+            if 'gas_fee' in tx_data:
+                print(f"💰 Gas Fee: {tx_data['gas_fee']} STE")
+            
+            # Execution status
+            status = tx_data.get('status', 'Unknown')
+            status_icon = "✅" if status == 'success' else "❌" if status == 'failed' else "⚠️"
+            print(f"{status_icon} Status: {status}")
+            
+            # Return value - this is the most important part
+            if 'return_value' in tx_data and tx_data['return_value'] is not None:
+                return_value = tx_data['return_value']
+                print(f"\n🎯 METHOD RETURN VALUE:")
+                print(f"   Method: {method_name}")
+                
+                # Format the return value nicely
+                if isinstance(return_value, dict):
+                    for key, value in return_value.items():
+                        print(f"   {key}: {value}")
+                elif isinstance(return_value, list):
+                    print(f"   Result: {return_value}")
+                else:
+                    print(f"   Result: {return_value}")
+            else:
+                print(f"\n📝 No return value (method: {method_name})")
+            
+            # Events if available
+            if 'events' in tx_data and tx_data['events']:
+                print(f"\n📋 CONTRACT EVENTS:")
+                for event in tx_data['events']:
+                    print(f"   • {event}")
+            
+            # Error details if transaction failed
+            if status == 'failed' and 'error' in tx_data:
+                print(f"\n❌ ERROR DETAILS:")
+                print(f"   {tx_data['error']}")
+            
+            print("="*50)
+            
+        except Exception as e:
+            print(f"❌ Error displaying transaction results: {e}")
+            # Fallback: show raw transaction data
+            print(f"📊 Raw transaction data: {tx_data}")
+    
     async def deploy_contract(self, contract_info: Dict, params: Dict, 
                             address: str, private_key: int) -> bool:
         """Deploy the smart contract"""
@@ -547,12 +658,25 @@ class ContractDeployer:
                     result = await response.json()
                     if result.get('ok'):
                         print("✅ Contract deployment submitted successfully!")
-                        print(f"📍 Contract Address: {result.get("result").get("contract_address")}")
-                        print(f"🔗 Transaction Hash: {sc_transaction.hash()}")
+                        contract_address = result.get("result").get("contract_address")
+                        tx_hash = sc_transaction.hash()
+                        print(f"📍 Contract Address: {contract_address}")
+                        print(f"🔗 Transaction Hash: {tx_hash}")
                         
-                        # Save deployment info
-                        self._save_deployment_info(contract_info, result.get("result").get("contract_address"), sc_transaction.hash(), params)
-                        return True
+                        # Wait for transaction confirmation
+                        print("⏳ Waiting for transaction confirmation...")
+                        confirmation_result = await self._wait_for_confirmation(tx_hash)
+                        
+                        if confirmation_result['confirmed']:
+                            print("✅ Transaction confirmed!")
+                            # Save deployment info
+                            self._save_deployment_info(contract_info, contract_address, tx_hash, params)
+                            return True
+                        else:
+                            print("⚠️  Transaction submitted but confirmation timed out")
+                            # Still save deployment info as transaction was submitted
+                            self._save_deployment_info(contract_info, contract_address, tx_hash, params)
+                            return True
                     else:
                         print(f"❌ Contract Deployment failed: {result.get('error', 'Unknown error')}")
                         return False
@@ -859,10 +983,26 @@ class ContractDeployer:
                 if response.status == 200:
                     result = await response.json()
                     if result.get('ok'):
+                        tx_hash = sc_transaction.hash()
                         print("✅ Contract call submitted successfully!")
-                        print(f"🔗 Transaction Hash: {sc_transaction.hash()}")
+                        print(f"🔗 Transaction Hash: {tx_hash}")
                         if result.get('result'):
                             print(f"📤 Result: {result['result']}")
+                            
+                        # Wait for transaction confirmation
+                        print("⏳ Waiting for transaction confirmation...")
+                        confirmation_result = await self._wait_for_confirmation(tx_hash)
+                        
+                        if confirmation_result['confirmed']:
+                            print("✅ Transaction confirmed!")
+                            
+                            # Display the actual execution results
+                            tx_data = confirmation_result['transaction_data']
+                            self._display_transaction_results(tx_data, method_name)
+                            
+                        else:
+                            print("⚠️  Transaction submitted but confirmation timed out")
+                        
                         return True
                     else:
                         print(f"❌ Contract call failed: {result.get('error', 'Unknown error')}")
