@@ -111,13 +111,189 @@ class Database:
             raise
 
     async def _load_from_file(self, file_path: Path):
-        """Load data from compressed JSON file"""
+        """Load data from compressed JSON file with advanced recovery for corrupted files"""
         if not file_path.exists():
             return {}
+            
+        # First try normal loading
         try:
             with gzip.open(file_path, 'rt', encoding='utf-8') as f:
                 return json.load(f)
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, EOFError) as e:
+            print(f"Error loading {file_path.name}: {str(e)}. Attempting recovery...")
+            
+            # Create a backup of the corrupted file
+            import shutil
+            import datetime
+            import io
+            import zlib
+            
+            backup_path = file_path.with_name(f"{file_path.stem}_corrupted_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json.gz.bak")
+            try:
+                shutil.copy2(file_path, backup_path)
+                print(f"Created backup of corrupted file at {backup_path}")
+            except Exception as backup_error:
+                print(f"Failed to create backup: {backup_error}")
+            
+            # Advanced recovery attempts
+            recovered_data = {}
+            
+            # Attempt 1: Try to decompress as much as possible using binary reading
+            try:
+                print(f"Recovery attempt 1: Extracting partial gzip data from {file_path.name}...")
+                
+                with open(file_path, 'rb') as f_in:
+                    decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)  # gzip format
+                    decompressed_data = b''
+                    
+                    # Read and decompress in chunks to get as much as possible
+                    chunk_size = 1024
+                    while True:
+                        chunk = f_in.read(chunk_size)
+                        if not chunk:
+                            break
+                        
+                        try:
+                            decompressed_data += decompressor.decompress(chunk)
+                        except Exception:
+                            # Reached corrupted part, try to use what we have
+                            break
+                    
+                    # Try to get any remaining data
+                    try:
+                        decompressed_data += decompressor.flush()
+                    except Exception:
+                        pass
+                    
+                # Try to parse as JSON
+                if decompressed_data:
+                    try:
+                        # Try to clean the data by finding the last valid JSON object closing
+                        text_data = decompressed_data.decode('utf-8')
+                        
+                        # Find the last complete JSON object
+                        last_closing_brace = text_data.rfind('}')
+                        if last_closing_brace > 0:
+                            # Count opening and closing braces to ensure we have valid JSON
+                            open_count = text_data[:last_closing_brace+1].count('{')
+                            close_count = text_data[:last_closing_brace+1].count('}')
+                            
+                            # If we have balanced braces, try to parse the truncated JSON
+                            if open_count == close_count:
+                                recovered_data = json.loads(text_data[:last_closing_brace+1])
+                                print(f"Successfully recovered data with {len(recovered_data)} entries!")
+                                return recovered_data
+                            else:
+                                # Try more aggressive recovery by finding balanced JSON
+                                print("Trying advanced JSON structure recovery...")
+                                
+                                # Extract individual JSON objects if this is a collection of objects
+                                if text_data.lstrip().startswith('{'):
+                                    brace_level = 0
+                                    start_idx = 0
+                                    objects = []
+                                    
+                                    for i, char in enumerate(text_data):
+                                        if char == '{':
+                                            if brace_level == 0:
+                                                start_idx = i
+                                            brace_level += 1
+                                        elif char == '}':
+                                            brace_level -= 1
+                                            if brace_level == 0:
+                                                try:
+                                                    obj = json.loads(text_data[start_idx:i+1])
+                                                    if isinstance(obj, dict) and len(obj) > 0:
+                                                        key = next(iter(obj.keys()))
+                                                        objects.append((key, obj))
+                                                except:
+                                                    pass
+                                    
+                                    if objects:
+                                        recovered_data = dict(objects)
+                                        print(f"Advanced recovery successful: recovered {len(recovered_data)} transactions!")
+                                        return recovered_data
+                    except Exception as json_err:
+                        print(f"JSON recovery failed: {json_err}")
+                        
+            except Exception as recovery_err:
+                print(f"Recovery attempt 1 failed: {recovery_err}")
+                
+            # Attempt 2: Try to recover individual transactions from the file
+            try:
+                print(f"Recovery attempt 2: Searching for valid JSON objects in {file_path.name}...")
+                # Use external tool if available or fallback to manual extraction
+                import subprocess
+                import tempfile
+                
+                with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as temp_out:
+                    temp_name = temp_out.name
+                
+                # Try using zcat to extract what it can
+                try:
+                    subprocess.run(['zcat', '-f', str(file_path)], stdout=open(temp_name, 'w'), stderr=subprocess.PIPE)
+                    
+                    with open(temp_name, 'r') as f:
+                        text = f.read()
+                        
+                    if text and '{' in text:
+                        # Try to find complete JSON objects
+                        try:
+                            # This may be a JSON object collection, try to parse individual items
+                            parsed_data = {}
+                            
+                            # Process each potential object
+                            i = 0
+                            while i < len(text):
+                                start = text.find('{', i)
+                                if start == -1:
+                                    break
+                                    
+                                # Find matching closing brace
+                                brace_count = 1
+                                j = start + 1
+                                while j < len(text) and brace_count > 0:
+                                    if text[j] == '{':
+                                        brace_count += 1
+                                    elif text[j] == '}':
+                                        brace_count -= 1
+                                    j += 1
+                                
+                                if brace_count == 0:  # Found complete object
+                                    try:
+                                        obj = json.loads(text[start:j])
+                                        if isinstance(obj, dict) and len(obj) >= 2 and 'tx_hash' in obj:
+                                            # This is likely a transaction record
+                                            parsed_data[obj.get('tx_hash', f'recovered_{len(parsed_data)}')] = obj
+                                    except:
+                                        pass
+                                
+                                i = j
+                            
+                            if parsed_data:
+                                print(f"Recovered {len(parsed_data)} transactions!")
+                                return parsed_data
+                        except Exception as parse_err:
+                            print(f"JSON parsing in recovery attempt 2 failed: {parse_err}")
+                except Exception as zcat_err:
+                    print(f"zcat recovery failed: {zcat_err}")
+                
+                # Clean up temp file
+                try:
+                    import os
+                    os.unlink(temp_name)
+                except:
+                    pass
+                    
+            except Exception as recovery2_err:
+                print(f"Recovery attempt 2 failed: {recovery2_err}")
+            
+            # If we got some data but not all, warn the user
+            if recovered_data:
+                print(f"Partial recovery successful: recovered {len(recovered_data)} entries. Some data may be lost.")
+                return recovered_data
+            
+            print(f"All recovery attempts failed for {file_path.name}. Using empty data. Some transactions may be lost.")
             return {}
 
     async def _load_data(self):
