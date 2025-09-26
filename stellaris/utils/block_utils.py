@@ -7,7 +7,7 @@ from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX, BLOCK_CO
 from stellaris.database import Database
 
 BLOCK_TIME = 15  # Target time per block in seconds
-BLOCKS_COUNT = Decimal(10) # Number of blocks to consider for difficulty adjustment
+BLOCKS_COUNT = 512  # Number of blocks to consider for difficulty adjustment
 START_DIFFICULTY = Decimal('6.0')
 
 
@@ -25,48 +25,44 @@ def get_max_difficulty_for_block(block_number: int) -> Decimal:
     # If block number is beyond all configured ranges, return no limit
     return Decimal('999.0')
 
-def difficulty_to_hashrate_old(difficulty: Decimal) -> int:
-    decimal = difficulty % 1 or 1/16
-    return Decimal(16 ** int(difficulty) * (16 * decimal))
-
 
 def difficulty_to_hashrate(difficulty: Decimal) -> int:
-    decimal = difficulty % 1
-    return Decimal(16 ** int(difficulty) * (16 / ceil(16 * (1 - decimal))))
-
-
-def hashrate_to_difficulty_old(hashrate: int) -> Decimal:
-    difficulty = int(log(hashrate, 16))
-    if hashrate == 16 ** difficulty:
-        return Decimal(difficulty)
-    return Decimal(difficulty + (hashrate / Decimal(16) ** difficulty) / 16)
-
-
-def hashrate_to_difficulty_wrong(hashrate: int) -> Decimal:
-    difficulty = int(log(hashrate, 16))
-    if hashrate == 16 ** difficulty:
-        return Decimal(difficulty)
-    ratio = hashrate / 16 ** difficulty
-
-    decimal = 16 / ratio / 16
-    decimal = 1 - floor(decimal * 10) / Decimal(10)
-    return Decimal(difficulty + decimal)
+    """
+    Convert a difficulty value to a hashrate.
+    Uses integer hex digit and fractional remainder for calculation.
+    Returns a Decimal representing hashrate.
+    """
+    int_part = floor(difficulty)
+    frac_part = difficulty % 1
+    
+    return Decimal(16 ** int_part * (16 / ceil(16 * (1 - frac_part))))
 
 
 def hashrate_to_difficulty(hashrate: int) -> Decimal:
-    difficulty = int(log(hashrate, 16))
-    ratio = hashrate / 16 ** difficulty
-
+    """
+    Convert a hashrate to a difficulty value.
+    Guards against negative/zero hashrates, computes integer hex digit,
+    and derives intra-bucket ratio.
+    Returns a Decimal representing difficulty.
+    """
+    # Guard against invalid hashrates
+    if hashrate <= 0:
+        return START_DIFFICULTY
+    
+    # Compute integer part (hex digit)
+    int_part = floor(log(hashrate, 16))
+    
+    # Compute ratio within the current bucket
+    ratio = hashrate / 16 ** int_part
+    
+    # Scan decimal tenths and return on first threshold match
     for i in range(0, 10):
-        coeff = 16 / ceil(16 * (1 - i / 10))
-        if coeff > ratio:
-            decimal = (i - 1) / Decimal(10)
-            return Decimal(difficulty + decimal)
-        if coeff == ratio:
-            decimal = i / Decimal(10)
-            return Decimal(difficulty + decimal)
-
-    return Decimal(difficulty) + Decimal('0.9')
+        threshold = 16 / ceil(16 * (1 - i / 10))
+        if ratio <= threshold:
+            return Decimal(int_part + i / 10)
+    
+    # Default to 0.9 if no match found
+    return Decimal(int_part + 0.9)
 
 
 async def calculate_difficulty() -> Tuple[Decimal, dict]:
@@ -79,33 +75,40 @@ async def calculate_difficulty() -> Tuple[Decimal, dict]:
     if last_block['id'] < BLOCKS_COUNT:
         return START_DIFFICULTY, last_block
 
-    if last_block['id'] % BLOCKS_COUNT == 0:
-        last_adjust_block = await database.get_block_by_id(last_block['id'] - BLOCKS_COUNT + 1)
+    # Retarget every 512 blocks
+    if last_block['id'] % 512 == 0:
+        # Get block from start of period
+        last_adjust_block = await database.get_block_by_id(last_block['id'] - 512 + 1)
         elapsed = last_block['timestamp'] - last_adjust_block['timestamp']
-        average_per_block = elapsed / BLOCKS_COUNT
+        average_per_block = elapsed / 512
         last_difficulty = last_block['difficulty']
-        if last_block['id'] <= 17500:
-            hashrate = difficulty_to_hashrate_old(last_difficulty)
-        else:
-            hashrate = difficulty_to_hashrate(last_difficulty)
+        
+        # Convert difficulty to hashrate
+        hashrate = difficulty_to_hashrate(last_difficulty)
+        
+        # Calculate adjustment ratio
         ratio = BLOCK_TIME / average_per_block
-        if last_block['id'] >= 180_000:  # from block 180k, allow difficulty to double at most
-            ratio = min(ratio, 2)
+        
+        # Clamp adjustment to [0.25, 4.0] range
+        ratio = max(0.25, min(ratio, 4.0))
+        
+        # Apply ratio to hashrate
         hashrate *= ratio
-        if last_block['id'] < 17500:
-            new_difficulty = hashrate_to_difficulty_old(hashrate)
-            new_difficulty = floor(new_difficulty * 10) / Decimal(10)
-        elif last_block['id'] < 180_000:
-            new_difficulty = hashrate_to_difficulty_wrong(hashrate)
-        else:
-            new_difficulty = hashrate_to_difficulty(hashrate)
+        
+        # Convert back to difficulty
+        new_difficulty = hashrate_to_difficulty(hashrate)
+        
+        # Print adjustment summary
+        print(f"Difficulty adjustment: {last_difficulty} → {new_difficulty} (ratio: {ratio:.2f})")
         
         # Apply maximum difficulty constraint for the next block
         next_block_number = last_block['id'] + 1
         max_difficulty = get_max_difficulty_for_block(next_block_number)
         if new_difficulty > max_difficulty:
             new_difficulty = max_difficulty
+            print(f"Capped difficulty to {max_difficulty} due to block constraints")
         
         return new_difficulty, last_block
 
+    # Return current on-chain difficulty within a period
     return last_block['difficulty'], last_block

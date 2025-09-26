@@ -3,6 +3,7 @@ from asyncio import gather
 from collections import deque
 import os
 from dotenv import dotenv_values
+import httpx
 import re
 import json
 from decimal import Decimal
@@ -25,7 +26,7 @@ from slowapi.errors import RateLimitExceeded
 
 from stellaris.utils.general import timestamp, sha256, transaction_to_json
 from stellaris.manager import create_block, get_difficulty, Manager, get_transactions_merkle_tree, \
-    split_block_content, calculate_difficulty, clear_pending_transactions, block_to_bytes, get_transactions_merkle_tree_ordered
+    split_block_content, calculate_difficulty, clear_pending_transactions, block_to_bytes
 from stellaris.node.nodes_manager import NodesManager, NodeInterface
 from stellaris.node.utils import ip_is_local
 from stellaris.transactions import Transaction, CoinbaseTransaction, SmartContractTransaction
@@ -53,15 +54,35 @@ app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 db: Database = None
-NodesManager.init()
+
+# Initialize node identity
+from stellaris.node.identity import initialize_identity, get_node_id
+
+# Initialize node identity first
+initialize_identity()
+node_id = get_node_id()
+
+# NodesManager will be initialized in the startup event with proper HTTP client
+nodes_manager = None
 started = False
 is_syncing = False
 self_url = None
 vm_manager = None  # Will be StellarisVMManager when initialized
 # Initialize VM Manager (will be set when database is ready)
-vm_manager: StellarisVMManager = None
+vm_manager = None  # Will be StellarisVMManager when initialized
 
 #print = ic
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize resources on startup"""
+    global nodes_manager, db
+    # Create an AsyncClient for the NodesManager to use
+    http_client = httpx.AsyncClient(timeout=10.0)
+    # Initialize the nodes manager with the HTTP client and db (will be set later)
+    nodes_manager = NodesManager(http_client)
+    # Initialize the nodes manager with our node ID
+    nodes_manager.initialize(node_id)
 
 app.add_middleware(
     CORSMiddleware,
@@ -73,11 +94,11 @@ app.add_middleware(
 config = dotenv_values(".env")
 
 async def propagate(path: str, args: dict, ignore_url=None, nodes: list = None):
-    global self_url
+    global self_url, nodes_manager
     self_node = NodeInterface(self_url or '')
     ignore_node = NodeInterface(ignore_url or '')
     aws = []
-    for node_url in nodes or NodesManager.get_propagate_nodes():
+    for node_url in nodes or nodes_manager.get_propagate_nodes():
         node_interface = NodeInterface(node_url)
         if node_interface.base_url == self_node.base_url or node_interface.base_url == ignore_node.base_url:
             continue
@@ -101,14 +122,14 @@ async def create_blocks(blocks: list):
                 txs.remove(tx)
                 break
         hex_txs = [tx.hex() for tx in txs]
-        block['merkle_tree'] = get_transactions_merkle_tree(hex_txs) if i > 22500 else get_transactions_merkle_tree_ordered(hex_txs)
+        block['merkle_tree'] = get_transactions_merkle_tree(hex_txs)
         block_content = block.get('content') or block_to_bytes(last_block['hash'], block)
 
         if i <= 22500 and sha256(block_content) != block['hash'] and i != 17972:
             from itertools import permutations
             for l in permutations(hex_txs):
                 _hex_txs = list(l)
-                block['merkle_tree'] = get_transactions_merkle_tree_ordered(_hex_txs)
+                block['merkle_tree'] = get_transactions_merkle_tree(_hex_txs)
                 block_content = block_to_bytes(last_block['hash'], block)
                 if sha256(block_content) == block['hash']:
                     break

@@ -32,3 +32,7 @@ SMART_CONTRACTS.md
 docs
 deployments.json
 debug_sc_transaction.py
+*.priv
+*.bak
+# Refrence
+denaro
