@@ -1,5 +1,6 @@
 import random
 from asyncio import gather
+import asyncio
 from collections import deque
 import os
 from dotenv import dotenv_values
@@ -23,6 +24,10 @@ from starlette.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+
+# Import new security modules
+from stellaris.node.peer_reputation import get_reputation_manager, ViolationSeverity
+from stellaris.node.security_monitor import get_security_monitor, SecurityEventType
 
 from stellaris.utils.general import timestamp, sha256, transaction_to_json
 from stellaris.manager import create_block, get_difficulty, Manager, get_transactions_merkle_tree, \
@@ -83,6 +88,20 @@ async def startup_event():
     nodes_manager = NodesManager(http_client)
     # Initialize the nodes manager with our node ID
     nodes_manager.initialize(node_id)
+    
+    # Initialize the handshake manager
+    from stellaris.node.handshake_handler import get_handshake_manager
+    handshake_manager = get_handshake_manager()
+    handshake_manager.set_http_client(http_client)
+    handshake_manager.set_nodes_manager(nodes_manager)
+    
+    # Include API routes
+    try:
+        from stellaris.node.routes import api_router
+        app.include_router(api_router)
+        print("API routes loaded successfully")
+    except Exception as e:
+        print(f"Warning: Failed to load API routes: {e}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -93,18 +112,147 @@ app.add_middleware(
 
 config = dotenv_values(".env")
 
-async def propagate(path: str, args: dict, ignore_url=None, nodes: list = None):
+async def propagate(path: str, args: dict, ignore_url=None, nodes: list = None, 
+                max_retries: int = 3, critical: bool = False):
+    """
+    Propagate a request to peers with retry logic and reputation tracking.
+    
+    This enhanced propagation function:
+    1. Prioritizes nodes by reputation
+    2. Implements retry logic with exponential backoff
+    3. Updates node reputation based on response
+    4. Logs failures for security monitoring
+    
+    Args:
+        path: API endpoint path to call
+        args: Arguments to pass to the endpoint
+        ignore_url: URL to skip (typically self or source)
+        nodes: Optional specific list of node URLs to use (bypasses reputation-based selection)
+        max_retries: Maximum number of retry attempts per node
+        critical: Whether this is a critical propagation (affects retry behavior)
+    """
     global self_url, nodes_manager
+    from stellaris.node.peer_reputation import get_reputation_manager, ViolationSeverity
+    from stellaris.node.security_monitor import get_security_monitor, SecurityEventType
+    
     self_node = NodeInterface(self_url or '')
     ignore_node = NodeInterface(ignore_url or '')
-    aws = []
-    for node_url in nodes or nodes_manager.get_propagate_nodes():
+    
+    # Get reputation manager
+    reputation_manager = get_reputation_manager()
+    security_monitor = get_security_monitor()
+    
+    # Get nodes to propagate to
+    target_nodes = []
+    if nodes:
+        # Use specified nodes directly
+        target_nodes = nodes
+    else:
+        # Get reputation-prioritized nodes from NodesManager
+        try:
+            # Get more nodes for critical operations to ensure propagation
+            limit = 20 if critical else 10
+            target_nodes = await nodes_manager.get_propagate_nodes(limit)
+        except Exception as e:
+            print(f"Error getting propagation nodes: {e}")
+            # Fallback to old method in case of error
+            target_nodes = nodes_manager.get_propagate_nodes(10)
+    
+    # Prepare tracking for which nodes we actually contacted
+    contacted_nodes = {}
+    successful_nodes = set()
+    
+    # Process nodes
+    for node_url in target_nodes:
         node_interface = NodeInterface(node_url)
+        
+        # Skip self and ignored URLs
         if node_interface.base_url == self_node.base_url or node_interface.base_url == ignore_node.base_url:
             continue
-        aws.append(node_interface.request(path, args, self_node.url))
-    for response in await gather(*aws, return_exceptions=True):
-        print('node response: ', response)
+        
+        # Extract node_id from node_interface if available, otherwise use URL as identifier
+        node_id = getattr(node_interface, 'node_id', node_url)
+        contacted_nodes[node_url] = node_id
+        
+        # Create task for this node with retry logic
+        asyncio.create_task(
+            _propagate_to_node(
+                node_interface, path, args, self_node.url, 
+                node_id, reputation_manager, security_monitor,
+                max_retries, critical, successful_nodes
+            )
+        )
+    
+    # For critical operations, wait briefly to ensure some propagation happens
+    if critical and not nodes:  # Only for automatic node selection
+        await asyncio.sleep(2)  # Brief wait for critical operations
+        
+    return len(contacted_nodes)
+
+async def _propagate_to_node(node_interface, path, args, sender_url, node_id, 
+                             reputation_manager, security_monitor, max_retries, 
+                             critical, successful_nodes):
+    """Helper function to handle propagation to a single node with retries"""
+    
+    retry_count = 0
+    success = False
+    
+    while retry_count <= max_retries:
+        try:
+            # Calculate backoff time (exponential with jitter)
+            if retry_count > 0:
+                backoff_time = min(10, (2 ** retry_count)) * (0.5 + random.random())
+                await asyncio.sleep(backoff_time)
+            
+            # Make the request
+            response = await node_interface.request(path, args, sender_url)
+            
+            # Process response
+            if response and not isinstance(response, Exception):
+                # Successful propagation
+                success = True
+                # Record good behavior if not explicitly specified
+                if not node_id.startswith('http'):
+                    await reputation_manager.record_good_behavior(node_id, 1)
+                successful_nodes.add(node_interface.base_url)
+                print(f"Propagation succeeded to {node_interface.base_url}: {path}")
+                break
+            else:
+                print(f"Propagation failed to {node_interface.base_url} (attempt {retry_count+1}/{max_retries+1})")
+                retry_count += 1
+        except Exception as e:
+            print(f"Error propagating to {node_interface.base_url}: {e}")
+            retry_count += 1
+            # Only record violation if we have a proper node ID and this was critical
+            if critical and not node_id.startswith('http'):
+                # Record failure with severity based on retries
+                severity = ViolationSeverity.LOW if retry_count == 1 else \
+                           ViolationSeverity.MEDIUM if retry_count <= max_retries else \
+                           ViolationSeverity.HIGH
+                await reputation_manager.record_violation(
+                    node_id, 
+                    severity, 
+                    f"Propagation failure: {path} after {retry_count} attempts"
+                )
+                # Log security event
+                await security_monitor.log_event(
+                    SecurityEventType.SYNC_ANOMALY,
+                    node_id=node_id,
+                    details={
+                        'path': path,
+                        'attempts': retry_count,
+                        'error': str(e)
+                    }
+                )
+    
+    # Final update for failed critical operations
+    if critical and not success and not node_id.startswith('http'):
+        # More severe penalty for critical operation failures
+        await reputation_manager.record_violation(
+            node_id,
+            ViolationSeverity.HIGH,
+            f"Critical propagation failure: {path}"
+        )
 
 
 async def create_blocks(blocks: list):
@@ -242,6 +390,8 @@ async def sync_blockchain(node_url: str = None):
 async def startup():
     global db
     global config
+    global self_url
+    
     db = await Database.create(
         user=config['STELLARIS_DATABASE_USER'] if 'STELLARIS_DATABASE_USER' in config else "stellaris" ,
         password=config['STELLARIS_DATABASE_PASSWORD'] if 'STELLARIS_DATABASE_PASSWORD' in config else 'stellaris',
@@ -251,6 +401,40 @@ async def startup():
     
     # Initialize VM Manager after database is ready
     await initialize_vm_manager()
+    
+    # Update handshake manager with database and self URL
+    try:
+        from stellaris.node.handshake_handler import get_handshake_manager
+        handshake_manager = get_handshake_manager()
+        handshake_manager.set_db(db)
+        
+        # Set self URL from environment or config
+        configured_url = os.environ.get('STELLARIS_SELF_URL', config.get('STELLARIS_SELF_URL', self_url))
+        if configured_url:
+            self_url = configured_url
+            handshake_manager.set_self_url(configured_url)
+            print(f"Node configured with self URL: {configured_url}")
+    except Exception as e:
+        print(f"Warning: Could not initialize handshake manager: {e}")
+    
+    # Initialize security services
+    # This will initialize and start all security components and processors
+    try:
+        from stellaris.node.security_init import initialize_security_services
+        services = await initialize_security_services(db=db)
+        print("Security services initialized successfully")
+    except Exception as e:
+        print(f"Warning: Could not initialize security services: {e}")
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Shutdown all services properly"""
+    try:
+        from stellaris.node.security_init import shutdown_security_services
+        await shutdown_security_services()
+        print("Security services shut down successfully")
+    except Exception as e:
+        print(f"Warning: Error during security services shutdown: {e}")
 
 
 @app.get("/")

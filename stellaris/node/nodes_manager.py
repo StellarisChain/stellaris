@@ -1,16 +1,21 @@
 import json
 import os
 import hashlib
+import random
 from os.path import dirname, exists
 import httpx
 import time
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import ipaddress
 import socket
+import asyncio
 
 from stellaris.node.identity import get_node_id, sign_message, get_canonical_json_bytes, get_public_key_hex
 from stellaris.utils.general import timestamp
 from stellaris.constants import MAX_BLOCK_SIZE_HEX
+from stellaris.node.peer_reputation import get_reputation_manager, ViolationSeverity
+from stellaris.node.handshake_challenge import get_challenge_manager
+from stellaris.node.security_monitor import get_security_monitor, SecurityEventType
 
 # Constants
 ACTIVE_NODES_DELTA = 60 * 60 * 24 * 7  # 7 days
@@ -194,36 +199,139 @@ class NodesManager:
         instance = cls.get_instance()
         return instance._get_recent_nodes_impl()
     
-    def get_propagate_peers(self, limit: int = 10) -> List[Dict]:
+    async def get_propagate_peers(self, limit: int = 10) -> List[Dict]:
         """
-        Get peers for outbound propagation, filtered to recent peers with URLs
+        Get peers for outbound propagation, filtered to recent peers with URLs and prioritized by reputation.
+        
+        This method selects peers for propagation considering:
+        1. Recent activity (seen within ACTIVE_NODES_DELTA)
+        2. Has a valid URL
+        3. Not banned
+        4. Higher reputation scores are prioritized
+        
+        Args:
+            limit: Maximum number of peers to return
+            
+        Returns:
+            List of peer dictionaries, prioritized by reputation
         """
         current_time = timestamp()
         recent_cutoff = current_time - ACTIVE_NODES_DELTA
+        reputation_manager = get_reputation_manager()
         
-        propagate_peers = [
+        # Get all recent peers with URLs
+        recent_peers = [
             {"node_id": node_id, **peer}
             for node_id, peer in self.peers.items()
             if peer["last_seen"] >= recent_cutoff and peer.get("url")
         ]
         
-        # Sort by last_seen (descending) and take up to limit
-        propagate_peers.sort(key=lambda p: p["last_seen"], reverse=True)
-        return propagate_peers[:limit]
+        # Filter out banned peers and get reputation scores
+        valid_peers = []
+        for peer in recent_peers:
+            node_id = peer["node_id"]
+            # Skip if banned
+            if await reputation_manager.is_banned(node_id):
+                continue
+            
+            # Get reputation score
+            score = await reputation_manager.get_score(node_id)
+            valid_peers.append((peer, score))
         
-    def _get_propagate_nodes_impl(self, limit: int = 10) -> List[str]:
+        # If we have more than 2x the limit, use weighted random selection favoring higher scores
+        if len(valid_peers) > limit * 2:
+            # Higher scores mean higher selection probability
+            weighted_selection = self._weighted_peer_selection(valid_peers, limit * 2)
+            # Sort the selected subset by score (highest first)
+            weighted_selection.sort(key=lambda x: x[1], reverse=True)
+            # Take the top 'limit' peers
+            selected_peers = [peer for peer, _ in weighted_selection[:limit]]
+            return selected_peers
+        
+        # Otherwise, just sort by score (highest first) and take top 'limit'
+        valid_peers.sort(key=lambda x: x[1], reverse=True)
+        return [peer for peer, _ in valid_peers[:limit]]
+    
+    def _weighted_peer_selection(self, peers_with_scores: List[Tuple[Dict, int]], limit: int) -> List[Tuple[Dict, int]]:
+        """
+        Select peers with probability weighted by their reputation score.
+        
+        Args:
+            peers_with_scores: List of (peer, score) tuples
+            limit: Number of peers to select
+            
+        Returns:
+            List of selected (peer, score) tuples
+        """
+        # Normalize scores to be at least 1 for probability calculation
+        normalized_peers = [(peer, max(1, score)) for peer, score in peers_with_scores]
+        
+        # Calculate total weight
+        total_weight = sum(score for _, score in normalized_peers)
+        
+        # Select 'limit' peers with probability proportional to score
+        selected = []
+        remaining = list(normalized_peers)
+        
+        for _ in range(min(limit, len(normalized_peers))):
+            if not remaining:
+                break
+                
+            # Get random value between 0 and total_weight
+            r = random.uniform(0, total_weight)
+            cumulative = 0
+            
+            for i, (peer, score) in enumerate(remaining):
+                cumulative += score
+                if cumulative >= r:
+                    selected.append((peer, score))
+                    # Remove selected peer from remaining and adjust total weight
+                    total_weight -= score
+                    del remaining[i]
+                    break
+        
+        return selected
+        
+    async def _get_propagate_nodes_impl(self, limit: int = 10) -> List[str]:
         """
         Get URLs of peers for propagation (implementation method).
         Returns a list of peer URLs.
         """
-        peers = self.get_propagate_peers(limit)
+        peers = await self.get_propagate_peers(limit)
         return [peer["url"] for peer in peers if peer.get("url")]
 
     @classmethod
-    def get_propagate_nodes(cls, limit: int = 10) -> List[str]:
-        """Static compatibility method"""
+    async def get_propagate_nodes(cls, limit: int = 10) -> List[str]:
+        """
+        Get URLs of peers for propagation with reputation prioritization.
+        
+        This method returns a list of peer URLs, prioritizing peers with
+        higher reputation scores.
+        
+        Args:
+            limit: Maximum number of peers to return
+            
+        Returns:
+            List of peer URLs
+        """
         instance = cls.get_instance()
-        return instance._get_propagate_nodes_impl(limit)
+        try:
+            return await instance._get_propagate_nodes_impl(limit)
+        except Exception as e:
+            # Fallback to old synchronous method for backward compatibility
+            print(f"Warning: Error in async get_propagate_nodes: {e}, using fallback")
+            # Simple fallback that doesn't use reputation
+            current_time = timestamp()
+            recent_cutoff = current_time - ACTIVE_NODES_DELTA
+            
+            propagate_peers = [
+                peer for node_id, peer in instance.peers.items()
+                if peer.get("last_seen", 0) >= recent_cutoff and peer.get("url")
+            ]
+            
+            # Sort by last_seen (descending) and take up to limit
+            propagate_peers.sort(key=lambda p: p.get("last_seen", 0), reverse=True)
+            return [peer["url"] for peer in propagate_peers[:limit] if peer.get("url")]
     
     def set_public_status(self, is_public: bool):
         """
