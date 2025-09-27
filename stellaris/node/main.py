@@ -8,7 +8,8 @@ import httpx
 import re
 import json
 from decimal import Decimal
-from datetime import datetime 
+from datetime import datetime, timedelta
+import hashlib 
 
 from asyncpg import UniqueViolationError
 from fastapi import FastAPI, Body, Query
@@ -75,6 +76,74 @@ self_url = None
 vm_manager = None  # Will be StellarisVMManager when initialized
 # Initialize VM Manager (will be set when database is ready)
 vm_manager = None  # Will be StellarisVMManager when initialized
+
+# ==================== PRICE SYSTEM ====================
+# Price history storage - in production this could be moved to database
+PRICE_HISTORY = {}
+BASE_PRICE_SEED = "stellaris_price_seed_2025"
+
+def generate_hourly_price(hour_timestamp: int) -> float:
+    """Generate a consistent price for a given hour using hash-based randomness"""
+    # Create a consistent seed for this hour
+    seed_string = f"{BASE_PRICE_SEED}_{hour_timestamp}"
+    hash_obj = hashlib.sha256(seed_string.encode())
+    hash_int = int(hash_obj.hexdigest()[:8], 16)  # Use first 8 hex chars
+    
+    # Use the hash to generate a consistent random value
+    random_gen = random.Random(hash_int)
+    
+    # Generate price between $2-10 with some price movement logic
+    base_price = 2.0 + (random_gen.random() * 8.0)  # Base between $2-10
+    
+    # Add some volatility based on previous hour (if exists)
+    prev_hour = hour_timestamp - 3600
+    if prev_hour in PRICE_HISTORY:
+        prev_price = PRICE_HISTORY[prev_hour]
+        # Add trend continuation or reversal
+        trend_factor = random_gen.uniform(-0.3, 0.3)  # ±30% influence from previous
+        base_price = prev_price + (prev_price * trend_factor)
+        
+        # Keep price within bounds
+        base_price = max(2.0, min(10.0, base_price))
+    
+    return round(base_price, 4)
+
+def get_current_price_data() -> dict:
+    """Get current price data with historical tracking"""
+    now = datetime.now()
+    current_hour = int(now.replace(minute=0, second=0, microsecond=0).timestamp())
+    
+    # Generate/get current hour price
+    if current_hour not in PRICE_HISTORY:
+        PRICE_HISTORY[current_hour] = generate_hourly_price(current_hour)
+    
+    current_price = PRICE_HISTORY[current_hour]
+    
+    # Generate historical prices for the last 24 hours
+    historical_prices = []
+    for i in range(24, 0, -1):  # 24 hours ago to 1 hour ago
+        hour_timestamp = current_hour - (i * 3600)
+        if hour_timestamp not in PRICE_HISTORY:
+            PRICE_HISTORY[hour_timestamp] = generate_hourly_price(hour_timestamp)
+        historical_prices.append(PRICE_HISTORY[hour_timestamp])
+    
+    # Get price from 24 hours ago for change calculation
+    price_24h_ago = historical_prices[0]  # First price in our historical array
+    
+    # Calculate 24h change percentage
+    change_24h = ((current_price - price_24h_ago) / price_24h_ago) * 100
+    
+    # Clean up old price data (keep only last 7 days)
+    cutoff_time = current_hour - (7 * 24 * 3600)
+    old_keys = [k for k in PRICE_HISTORY.keys() if k < cutoff_time]
+    for key in old_keys:
+        del PRICE_HISTORY[key]
+    
+    return {
+        "price": current_price,
+        "historical_prices": historical_prices,
+        "change_24h": round(change_24h, 2)
+    }
 
 #print = ic
 
@@ -732,6 +801,18 @@ async def get_block(request: Request, block: str, full_transactions: bool = Fals
 async def get_blocks(request: Request, offset: int, limit: int = Query(default=..., le=1000), pretty: bool = False):
     blocks = await db.get_blocks(offset, limit)
     result = {'ok': True, 'result': blocks}
+    return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
+
+
+@app.get("/price")
+async def get_price(pretty: bool = False):
+    """Get current price with historical data and 24h change"""
+    try:
+        price_data = get_current_price_data()
+        result = price_data #{'ok': True, 'result': price_data}
+    except Exception as e:
+        result = {'ok': False, 'error': str(e)}
+    
     return Response(content=json.dumps(result, indent=4, cls=CustomJSONEncoder), media_type="application/json") if pretty else result
 
 
