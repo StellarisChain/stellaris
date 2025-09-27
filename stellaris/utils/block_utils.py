@@ -26,7 +26,7 @@ def get_max_difficulty_for_block(block_number: int) -> Decimal:
     return Decimal('999.0')
 
 
-def difficulty_to_hashrate(difficulty: Decimal) -> int:
+def difficulty_to_hashrate(difficulty: Decimal) -> Decimal:
     """
     Convert a difficulty value to a hashrate.
     Uses integer hex digit and fractional remainder for calculation.
@@ -38,7 +38,7 @@ def difficulty_to_hashrate(difficulty: Decimal) -> int:
     return Decimal(16 ** int_part * (16 / ceil(16 * (1 - frac_part))))
 
 
-def hashrate_to_difficulty(hashrate: int) -> Decimal:
+def hashrate_to_difficulty(hashrate: Union[int, Decimal]) -> Decimal:
     """
     Convert a hashrate to a difficulty value.
     Guards against negative/zero hashrates, computes integer hex digit,
@@ -93,7 +93,7 @@ async def calculate_difficulty() -> Tuple[Decimal, dict]:
         ratio = max(0.25, min(ratio, 4.0))
         
         # Apply ratio to hashrate
-        hashrate *= ratio
+        hashrate *= Decimal(str(ratio))
         
         # Convert back to difficulty
         new_difficulty = hashrate_to_difficulty(hashrate)
