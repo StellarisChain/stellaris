@@ -239,8 +239,18 @@ async def propagate(path: str, args: dict, ignore_url=None, nodes: list = None,
         if node_interface.base_url == self_node.base_url or node_interface.base_url == ignore_node.base_url:
             continue
         
-        # Extract node_id from node_interface if available, otherwise use URL as identifier
-        node_id = getattr(node_interface, 'node_id', node_url)
+        # Try to ensure handshake and get proper node_id
+        try:
+            if await node_interface.ensure_handshake():
+                node_id = node_interface.node_id
+            else:
+                # Fall back to using URL as identifier if handshake fails
+                node_id = node_url
+        except Exception as e:
+            # If handshake fails, use URL as identifier
+            node_id = node_url
+            print(f"Handshake failed for {node_url}, using URL as identifier: {e}")
+        
         contacted_nodes[node_url] = node_id
         
         # Create task for this node with retry logic
@@ -405,7 +415,7 @@ async def _sync_blockchain(node_url: str = None):
             blocks = await node_interface.get_blocks(i, limit)
         except Exception as e:
             print(e)
-            NodesManager.sync()
+            NodesManager.sync_peers()
             break
         try:
             _, last_block = await calculate_difficulty()
@@ -540,7 +550,7 @@ async def middleware(request: Request, call_next):
             #requests.get(f'{node_url}/add_node', {'url': })
             j = await NodesManager.request(f'{node_url}/get_nodes')
             nodes.extend(j['result'])
-            NodesManager.sync()
+            NodesManager.sync_peers()
         except:
             pass
 
@@ -557,7 +567,7 @@ async def middleware(request: Request, call_next):
             except ValueError:
                 pass
 
-            NodesManager.sync()
+            NodesManager.sync_peers()
 
             try:
                 await propagate('add_node', {'url': self_url})
