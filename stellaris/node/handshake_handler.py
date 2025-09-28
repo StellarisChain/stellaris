@@ -200,9 +200,15 @@ class HandshakeManager:
         Returns:
             True if the node ID matches the public key, False otherwise
         """
-        # In a real implementation, this would verify the derivation
-        # For now, we'll assume it's valid
-        return True
+        try:
+            import hashlib
+            # Node ID should be SHA256 hash of the uncompressed public key
+            pubkey_bytes = bytes.fromhex(pubkey)
+            computed_node_id = hashlib.sha256(pubkey_bytes).hexdigest()
+            return node_id == computed_node_id
+        except Exception as e:
+            print(f"Error verifying node ID: {e}")
+            return False
     
     async def do_handshake_with_peer(self, peer_url: str) -> Tuple[bool, Optional[str], Optional[Dict]]:
         """

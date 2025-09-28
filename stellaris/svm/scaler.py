@@ -6,6 +6,7 @@ Provides parallel execution, load balancing, and performance optimization
 import asyncio
 import time
 import threading
+import random
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional, Tuple, Set
 from decimal import Decimal
@@ -313,11 +314,16 @@ class StellarisVMScaler:
                 if task_id in self.dependency_graph.completed:
                     continue
                 
-                # Check for state conflicts
-                if (task.transaction.is_call() and 
-                    task.transaction.contract_address == transaction.contract_address):
-                    # Same contract - potential state conflict
-                    dependencies.add(task_id)
+                # More granular dependency analysis
+                if task.transaction.is_call():
+                    # Only create dependency if transactions target the same contract
+                    # AND involve state-modifying operations (not view calls)
+                    if (task.transaction.contract_address == transaction.contract_address and
+                        self._is_state_modifying_call(task.transaction) and 
+                        self._is_state_modifying_call(transaction)):
+                        # Further check if they affect the same state variables (simplified)
+                        if self._may_conflict_state(task.transaction, transaction):
+                            dependencies.add(task_id)
                 
                 elif (task.transaction.is_deployment() and 
                       task.transaction.get_contract_deployment_address() == transaction.contract_address):
@@ -326,15 +332,51 @@ class StellarisVMScaler:
         
         return dependencies
     
+    def _is_state_modifying_call(self, transaction: SmartContractTransaction) -> bool:
+        """
+        Check if a transaction is likely to modify contract state.
+        This is a simplified heuristic - in production, this would analyze the actual contract code.
+        """
+        # For now, assume transactions with non-zero value or specific method names modify state
+        try:
+            if hasattr(transaction, 'value') and transaction.value > 0:
+                return True
+            
+            # Check method name if available (simplified)
+            if hasattr(transaction, 'method_name'):
+                read_only_methods = {'view', 'get', 'read', 'query', 'check'}
+                method_lower = transaction.method_name.lower()
+                return not any(readonly in method_lower for readonly in read_only_methods)
+            
+            # Default to assuming state modification for safety
+            return True
+        except:
+            return True
+    
+    def _may_conflict_state(self, tx1: SmartContractTransaction, tx2: SmartContractTransaction) -> bool:
+        """
+        Check if two transactions may conflict on the same state variables.
+        This is a simplified heuristic.
+        """
+        # For now, assume all state-modifying calls to the same contract may conflict
+        # In production, this would analyze which state variables are accessed
+        return True
+    
     def _select_node(self) -> Optional[ExecutionNode]:
         """Select the best available node for execution"""
         if not self.load_balancer_enabled:
-            # Round-robin selection
-            self.node_selector = (self.node_selector + 1) % len(self.nodes)
-            node_id = f"node_{self.node_selector}"
-            return self.nodes[node_id] if self.nodes[node_id].is_available else None
+            # Improved round-robin selection with availability check
+            attempts = 0
+            while attempts < len(self.nodes):
+                self.node_selector = (self.node_selector + 1) % len(self.nodes)
+                node_id = f"node_{self.node_selector}"
+                node = self.nodes.get(node_id)
+                if node and node.is_available and node.current_load < node.max_concurrent:
+                    return node
+                attempts += 1
+            return None  # No available nodes
         
-        # Load-based selection
+        # Enhanced load-based selection with weighted scoring
         best_node = None
         best_score = float('inf')
         
@@ -342,10 +384,25 @@ class StellarisVMScaler:
             if not node.is_available or node.current_load >= node.max_concurrent:
                 continue
             
-            # Calculate load score (lower is better)
+            # Enhanced scoring algorithm
             load_ratio = node.current_load / node.max_concurrent
-            time_penalty = node.avg_execution_time / 1000.0  # Convert to seconds
-            score = load_ratio * 10 + time_penalty
+            
+            # Normalize execution time (avoid division by zero)
+            time_penalty = (node.avg_execution_time / 1000.0) if node.avg_execution_time > 0 else 0.1
+            
+            # Add historical performance factor
+            success_rate = 1.0
+            if node.total_executed > 0:
+                # Assume we track failed executions per node (would need to add this field)
+                success_rate = max(0.1, 1.0)  # Placeholder for now
+            
+            # Composite score: lower is better
+            score = (load_ratio * 40 +           # Load factor (40% weight)
+                    time_penalty * 30 +          # Speed factor (30% weight) 
+                    (1 - success_rate) * 30)     # Reliability factor (30% weight)
+            
+            # Add small random factor to avoid always picking the same node
+            score += random.uniform(0, 0.1)
             
             if score < best_score:
                 best_score = score
@@ -473,20 +530,42 @@ class StellarisVMScaler:
         while self.running:
             try:
                 current_time = time.time()
+                recovered_nodes = []
                 
                 for node in self.nodes.values():
                     # Check node responsiveness
                     if current_time - node.last_heartbeat > 30:  # 30 second timeout
-                        node.is_available = False
-                        logger.warning(f"Node {node.node_id} marked as unavailable")
+                        if node.is_available:
+                            node.is_available = False
+                            logger.warning(f"Node {node.node_id} marked as unavailable")
                     else:
-                        node.is_available = True
+                        if not node.is_available:
+                            node.is_available = True
+                            recovered_nodes.append(node.node_id)
+                            logger.info(f"Node {node.node_id} recovered and marked as available")
+                
+                # Log recovery events
+                if recovered_nodes:
+                    logger.info(f"Recovered nodes: {recovered_nodes}")
+                
+                # Check for stalled executions and reset if needed
+                self._check_stalled_executions(current_time)
                 
                 await asyncio.sleep(10)  # Check every 10 seconds
                 
             except Exception as e:
                 logger.error(f"Error in health monitor: {e}")
                 await asyncio.sleep(10)
+    
+    def _check_stalled_executions(self, current_time: float):
+        """Check for and recover from stalled executions"""
+        for node in self.nodes.values():
+            # If a node has been unavailable for too long and has load, reset it
+            if not node.is_available and node.current_load > 0:
+                if current_time - node.last_heartbeat > 60:  # 1 minute
+                    logger.warning(f"Resetting stalled node {node.node_id} (load: {node.current_load})")
+                    node.current_load = 0
+                    node.is_available = True  # Give it another chance
     
     async def _cache_cleaner(self):
         """Clean expired cache entries"""
@@ -495,6 +574,7 @@ class StellarisVMScaler:
                 current_time = time.time()
                 expired_keys = []
                 
+                # Clean execution cache
                 for key, (result, cache_time) in self.execution_cache.items():
                     if current_time - cache_time > self.cache_ttl:
                         expired_keys.append(key)
@@ -502,8 +582,30 @@ class StellarisVMScaler:
                 for key in expired_keys:
                     del self.execution_cache[key]
                 
-                if expired_keys:
-                    logger.debug(f"Cleaned {len(expired_keys)} expired cache entries")
+                # Clean completed tasks if they're too old (prevent memory leak)
+                old_task_keys = []
+                for task_id, result in self.completed_tasks.items():
+                    # Remove completed tasks older than 1 hour
+                    if current_time - getattr(result, 'completion_time', current_time) > 3600:
+                        old_task_keys.append(task_id)
+                
+                for key in old_task_keys:
+                    del self.completed_tasks[key]
+                
+                if expired_keys or old_task_keys:
+                    logger.debug(f"Cleaned {len(expired_keys)} cache entries and {len(old_task_keys)} old tasks")
+                
+                # Limit cache size to prevent unbounded growth
+                max_cache_size = 1000
+                if len(self.execution_cache) > max_cache_size:
+                    # Remove oldest entries
+                    sorted_cache = sorted(
+                        self.execution_cache.items(),
+                        key=lambda x: x[1][1]  # Sort by cache_time
+                    )
+                    # Keep only the newest max_cache_size entries
+                    self.execution_cache = dict(sorted_cache[-max_cache_size:])
+                    logger.debug(f"Trimmed execution cache to {max_cache_size} entries")
                 
                 await asyncio.sleep(300)  # Clean every 5 minutes
                 

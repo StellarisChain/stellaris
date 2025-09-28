@@ -1,1 +1,1 @@
-{"nodes": ["https://stellaris-node.connor33341.dev"], "last_messages": {"https://stellaris-node.connor33341.dev": 1753300898}}
+{"peers": {"test_peer_1": {"pubkey": "pubkey123", "url": "http://example.com", "last_seen": 1759088147, "is_public": false}, "peer1": {"pubkey": "pubkey1", "url": "http://peer1.com", "last_seen": 1759088221, "is_public": false}, "peer2": {"pubkey": "pubkey2", "url": "http://peer2.com", "last_seen": 1759088221, "is_public": false}}}

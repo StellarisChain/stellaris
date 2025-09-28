@@ -103,8 +103,8 @@ class NodesManager:
             json.dump({"peers": self.peers}, f)
             
     @classmethod
-    def sync(cls):
-        """Static compatibility method"""
+    def sync_peers(cls):
+        """Static compatibility method for sync"""
         instance = cls.get_instance()
         instance.sync()
     
@@ -482,12 +482,38 @@ class NodeInterface:
     """
     Interface for making authenticated requests to peer nodes.
     """
-    def __init__(self, url: str):
+    def __init__(self, url: str, node_id: str = None):
         """
-        Initialize with a node URL.
+        Initialize with a node URL and optional node_id.
         """
         self.url = url
         self.base_url = url.rstrip('/')
+        self.node_id = node_id
+        self._handshake_completed = False
+        
+    async def ensure_handshake(self) -> bool:
+        """
+        Ensure handshake is completed and node_id is known.
+        Returns True if handshake successful, False otherwise.
+        """
+        if self._handshake_completed and self.node_id:
+            return True
+            
+        try:
+            from stellaris.node.handshake_handler import get_handshake_manager
+            handshake_manager = get_handshake_manager()
+            
+            success, node_id, info = await handshake_manager.do_handshake_with_peer(self.base_url)
+            
+            if success and node_id:
+                self.node_id = node_id
+                self._handshake_completed = True
+                return True
+                
+        except Exception as e:
+            print(f"Handshake failed with {self.base_url}: {e}")
+        
+        return False
     
     async def request(self, path: str, args: dict = None, sender_node: str = None):
         """
@@ -513,3 +539,33 @@ class NodeInterface:
                 return response.json()
         except httpx.HTTPError:
             return {'ok': False, 'error': f"Error connecting to {url}"}
+    
+    async def get_nodes(self):
+        """Get nodes from this peer with error handling"""
+        try:
+            response = await self.request('/get_nodes')
+            if response and response.get('ok'):
+                return response.get('result', [])
+        except Exception as e:
+            print(f"Error getting nodes from {self.base_url}: {e}")
+        return []
+    
+    async def get_block(self, block_id: int):
+        """Get block from this peer with error handling"""
+        try:
+            response = await self.request('/get_block', {'block': str(block_id)})
+            if response and response.get('ok'):
+                return response.get('result', {})
+        except Exception as e:
+            print(f"Error getting block {block_id} from {self.base_url}: {e}")
+        return {}
+    
+    async def get_blocks(self, offset: int, limit: int):
+        """Get blocks from this peer with error handling"""
+        try:
+            response = await self.request('/get_blocks', {'offset': offset, 'limit': limit})
+            if response and response.get('ok'):
+                return response.get('result', [])
+        except Exception as e:
+            print(f"Error getting blocks from {self.base_url}: {e}")
+        return []
