@@ -2,4 +2,5 @@ from .transaction_input import TransactionInput
 from .transaction_output import TransactionOutput
 from .transaction import Transaction
 from .coinbase_transaction import CoinbaseTransaction
+from .treasury_transaction import TreasuryTransaction
 from .smart_contract_transaction import SmartContractTransaction

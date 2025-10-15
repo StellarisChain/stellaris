@@ -17,6 +17,7 @@ from stellaris.node.peer_reputation import get_reputation_manager, ViolationSeve
 from stellaris.node.security_monitor import get_security_monitor, SecurityEventType
 from stellaris.node.identity import verify_signature, sign_message, get_node_id, get_public_key_hex
 from stellaris.utils.general import timestamp
+from stellaris.constants import NETWORK_ID, NETWORK_MAGIC_BYTES
 
 
 class HandshakeManager:
@@ -68,7 +69,7 @@ class HandshakeManager:
         Generate a cryptographic challenge for handshake (server-side).
         
         Returns:
-            Dictionary containing challenge data
+            Dictionary containing challenge data including network ID
         """
         # Create new challenge
         challenge = await self.challenge_manager.create_challenge()
@@ -85,14 +86,17 @@ class HandshakeManager:
             "is_public": self.self_url is not None,  # Public if we have a URL
             "url": self.self_url,
             "height": height,
-            "timestamp": timestamp()
+            "timestamp": timestamp(),
+            "network_id": NETWORK_ID,  # Add network ID to prevent cross-network connections
+            "network_magic": NETWORK_MAGIC_BYTES[NETWORK_ID].hex()
         }
     
     async def verify_challenge_response(self, 
                                         challenge: str, 
                                         signature: str, 
                                         node_id: str, 
-                                        pubkey: str) -> bool:
+                                        pubkey: str,
+                                        peer_network_id: str = None) -> bool:
         """
         Verify a challenge response (server-side).
         
@@ -101,10 +105,26 @@ class HandshakeManager:
             signature: Signature of the challenge
             node_id: The node ID claiming to have signed the challenge
             pubkey: Public key of the signing node
+            peer_network_id: Network ID of the peer (for mainnet/testnet isolation)
             
         Returns:
-            True if signature is valid, False otherwise
+            True if signature is valid and network matches, False otherwise
         """
+        # Verify network ID matches to prevent mainnet/testnet cross-connection
+        if peer_network_id and peer_network_id != NETWORK_ID:
+            await self.reputation_manager.record_violation(
+                node_id,
+                ViolationSeverity.HIGH,
+                f"Network ID mismatch: peer={peer_network_id}, local={NETWORK_ID}"
+            )
+            await self.security_monitor.log_event(
+                SecurityEventType.HANDSHAKE_FAILURE,
+                node_id=node_id,
+                details={"reason": "network_id_mismatch", "peer_network": peer_network_id, "local_network": NETWORK_ID}
+            )
+            print(f"⚠️  Rejected peer {node_id}: network ID mismatch (peer={peer_network_id}, local={NETWORK_ID})")
+            return False
+        
         # Verify the challenge exists
         if not await self.challenge_manager.verify_challenge_exists(challenge):
             await self.security_monitor.log_event(

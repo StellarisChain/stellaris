@@ -128,8 +128,7 @@ class Transaction:
                 continue
             if not await tx_input.verify(tx_hex):
                 print('signature not valid')
-                # TODO: FIX THIS, create contract > databast add_pending_transaction > fails here
-                #return False
+                return False
             checked_signatures.append(signature)
         return True
 

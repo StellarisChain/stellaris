@@ -1,6 +1,15 @@
 """
 Stellaris VM Manager for blockchain integration and scaling
 Handles VM instances, state management, and execution coordination
+Uses RestrictedPython for secure contract execution
+
+Production-ready features:
+- VM pooling for efficient resource utilization
+- Hex-encoded contract code handling
+- Comprehensive input validation
+- Security monitoring and logging
+- Gas tracking and limits
+- State caching with TTL
 """
 
 import asyncio
@@ -13,9 +22,10 @@ import hashlib
 import json
 import logging
 
-from stellaris.svm.vm import StellarisVM, ContractState, ExecutionContext
+# Use RestrictedPython-based VM for security
+from stellaris.svm.restricted_vm import RestrictedStellarisVM as StellarisVM, ContractState, ExecutionContext
 from stellaris.svm.blockchain_interface import StellarisBlockchainInterface
-from stellaris.svm.exceptions import SVMError, SVMGasError, SVMContractError
+from stellaris.svm.exceptions import SVMError, SVMGasError, SVMContractError, SVMValidationError
 from stellaris.transactions.smart_contract_transaction import SmartContractTransaction
 from stellaris.database import Database
 
@@ -123,19 +133,164 @@ class StellarisVMManager:
             
             self.stats.active_vms = max(0, self.stats.active_vms - 1)
     
+    def _validate_contract_code(self, code_hex: str) -> Tuple[bool, str]:
+        """
+        Validate hex-encoded contract code
+        
+        Args:
+            code_hex: Hex-encoded contract source code
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not code_hex:
+            return False, "Contract code cannot be empty"
+        
+        if not isinstance(code_hex, str):
+            return False, "Contract code must be a string"
+        
+        # Validate hex format
+        if len(code_hex) % 2 != 0:
+            return False, "Contract code hex must have even length"
+        
+        try:
+            code_bytes = bytes.fromhex(code_hex)
+        except ValueError:
+            return False, "Contract code must be valid hexadecimal"
+        
+        # Validate size
+        if len(code_bytes) > SmartContractTransaction.MAX_CONTRACT_CODE_SIZE:
+            return False, f"Contract code too large: {len(code_bytes)} bytes (max: {SmartContractTransaction.MAX_CONTRACT_CODE_SIZE})"
+        
+        if len(code_bytes) < 10:
+            return False, "Contract code too small to be valid"
+        
+        # Decode and validate as UTF-8
+        try:
+            code_str = code_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            return False, "Contract code must be valid UTF-8 when decoded"
+        
+        # Basic Python syntax validation
+        if 'class' not in code_str and 'def' not in code_str:
+            return False, "Contract code must contain at least one class or function definition"
+        
+        return True, ""
+    
+    def _validate_contract_address(self, address: str) -> Tuple[bool, str]:
+        """
+        Validate contract address format
+        
+        Args:
+            address: Contract address to validate
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not address:
+            return False, "Contract address cannot be empty"
+        
+        if not isinstance(address, str):
+            return False, "Contract address must be a string"
+        
+        # Remove 0x prefix if present
+        clean_address = address[2:] if address.startswith('0x') else address
+        
+        if len(clean_address) != 40:
+            return False, f"Contract address must be 40 hex characters, got {len(clean_address)}"
+        
+        try:
+            int(clean_address, 16)
+        except ValueError:
+            return False, "Contract address must be valid hexadecimal"
+        
+        return True, ""
+    
+    def _validate_method_args(self, args: List[Any]) -> Tuple[bool, str]:
+        """
+        Validate method arguments
+        
+        Args:
+            args: List of method arguments
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not isinstance(args, list):
+            return False, "Method arguments must be a list"
+        
+        # Validate JSON serializability
+        try:
+            json.dumps(args, default=lambda x: str(x) if isinstance(x, Decimal) else None)
+        except (TypeError, ValueError) as e:
+            return False, f"Method arguments must be JSON-serializable: {e}"
+        
+        # Limit argument count to prevent abuse
+        if len(args) > 100:
+            return False, f"Too many arguments: {len(args)} (max: 100)"
+        
+        return True, ""
+    
     async def deploy_contract(self, transaction: SmartContractTransaction, 
                             sender: str) -> ExecutionResult:
         """
-        Deploy a smart contract
+        Deploy a smart contract with comprehensive validation
         
         Args:
-            transaction: Smart contract deployment transaction
+            transaction: Smart contract deployment transaction (with hex-encoded code)
             sender: Address of the deployer
             
         Returns:
-            ExecutionResult with deployment status
+            ExecutionResult with deployment status and contract address
+            
+        Raises:
+            SVMValidationError: If validation fails
         """
         start_time = time.time()
+        
+        # Validate sender address
+        if not sender or not isinstance(sender, str):
+            return ExecutionResult(
+                success=False,
+                error="Invalid sender address",
+                gas_used=0
+            )
+        
+        # Validate hex-encoded contract code
+        is_valid, error_msg = self._validate_contract_code(transaction.contract_code)
+        if not is_valid:
+            logger.error(f"Contract code validation failed: {error_msg}")
+            return ExecutionResult(
+                success=False,
+                error=f"Invalid contract code: {error_msg}",
+                gas_used=0
+            )
+        
+        # Validate constructor arguments
+        is_valid, error_msg = self._validate_method_args(transaction.method_args)
+        if not is_valid:
+            logger.error(f"Constructor arguments validation failed: {error_msg}")
+            return ExecutionResult(
+                success=False,
+                error=f"Invalid constructor arguments: {error_msg}",
+                gas_used=0
+            )
+        
+        # Validate gas limit
+        if transaction.gas_limit < SmartContractTransaction.MIN_GAS_LIMIT:
+            return ExecutionResult(
+                success=False,
+                error=f"Gas limit too low: {transaction.gas_limit} (min: {SmartContractTransaction.MIN_GAS_LIMIT})",
+                gas_used=0
+            )
+        
+        if transaction.gas_limit > SmartContractTransaction.MAX_GAS_LIMIT_DEPLOY:
+            return ExecutionResult(
+                success=False,
+                error=f"Gas limit too high: {transaction.gas_limit} (max: {SmartContractTransaction.MAX_GAS_LIMIT_DEPLOY})",
+                gas_used=0
+            )
+        
         execution_id = hashlib.sha256(
             f"{sender}{time.time()}{transaction.contract_code}".encode()
         ).hexdigest()[:16]
@@ -149,9 +304,23 @@ class StellarisVMManager:
             tx_hash = hashlib.sha256(transaction.hex().encode()).hexdigest()
             self.blockchain_interface.set_current_transaction_hash(tx_hash)
             
-            # Deploy contract
+            # Decode hex-encoded contract code
+            try:
+                code_bytes = bytes.fromhex(transaction.contract_code)
+                code_str = code_bytes.decode('utf-8')
+            except (ValueError, UnicodeDecodeError) as e:
+                logger.error(f"Failed to decode contract code: {e}")
+                return ExecutionResult(
+                    success=False,
+                    error=f"Contract code decoding failed: {e}",
+                    gas_used=0
+                )
+            
+            logger.info(f"Deploying contract for {sender}, code size: {len(code_bytes)} bytes, gas_limit: {transaction.gas_limit}")
+            
+            # Deploy contract with decoded code
             contract_address = vm.deploy_contract(
-                code=transaction.contract_code,
+                code=code_str,  # Pass decoded code to VM
                 constructor_args=transaction.method_args,
                 deployer=sender,
                 gas_limit=transaction.gas_limit
@@ -161,6 +330,8 @@ class StellarisVMManager:
             transaction.contract_address = contract_address
             transaction.gas_used = vm.execution_context.gas_used if vm.execution_context else 0
             transaction.execution_result = contract_address
+            
+            logger.info(f"Contract deployed successfully at {contract_address}, gas used: {transaction.gas_used}")
             
             # Persist contract state
             await self._persist_contract_state(contract_address, vm.contracts[contract_address])
@@ -177,7 +348,7 @@ class StellarisVMManager:
             )
             
         except Exception as e:
-            logger.error(f"Contract deployment failed: {e}")
+            logger.error(f"Contract deployment failed: {e}", exc_info=True)
             return ExecutionResult(
                 success=False,
                 error=str(e),
@@ -193,16 +364,78 @@ class StellarisVMManager:
     async def call_contract(self, transaction: SmartContractTransaction,
                           sender: str) -> ExecutionResult:
         """
-        Call a smart contract method
+        Call a smart contract method with comprehensive validation
         
         Args:
             transaction: Smart contract call transaction
             sender: Address of the caller
             
         Returns:
-            ExecutionResult with call results
+            ExecutionResult with call results and return value
+            
+        Raises:
+            SVMValidationError: If validation fails
         """
         start_time = time.time()
+        
+        # Validate sender address
+        if not sender or not isinstance(sender, str):
+            return ExecutionResult(
+                success=False,
+                error="Invalid sender address",
+                gas_used=0
+            )
+        
+        # Validate contract address
+        is_valid, error_msg = self._validate_contract_address(transaction.contract_address)
+        if not is_valid:
+            logger.error(f"Contract address validation failed: {error_msg}")
+            return ExecutionResult(
+                success=False,
+                error=f"Invalid contract address: {error_msg}",
+                gas_used=0
+            )
+        
+        # Validate method name
+        if not transaction.method_name or not isinstance(transaction.method_name, str):
+            return ExecutionResult(
+                success=False,
+                error="Method name cannot be empty",
+                gas_used=0
+            )
+        
+        if not transaction.method_name.replace('_', '').isalnum():
+            return ExecutionResult(
+                success=False,
+                error=f"Invalid method name format: {transaction.method_name}",
+                gas_used=0
+            )
+        
+        # Validate method arguments
+        is_valid, error_msg = self._validate_method_args(transaction.method_args)
+        if not is_valid:
+            logger.error(f"Method arguments validation failed: {error_msg}")
+            return ExecutionResult(
+                success=False,
+                error=f"Invalid method arguments: {error_msg}",
+                gas_used=0
+            )
+        
+        # Validate gas limit
+        if transaction.gas_limit < SmartContractTransaction.MIN_GAS_LIMIT:
+            return ExecutionResult(
+                success=False,
+                error=f"Gas limit too low: {transaction.gas_limit} (min: {SmartContractTransaction.MIN_GAS_LIMIT})",
+                gas_used=0
+            )
+        
+        if transaction.gas_limit > SmartContractTransaction.MAX_GAS_LIMIT_CALL:
+            return ExecutionResult(
+                success=False,
+                error=f"Gas limit too high: {transaction.gas_limit} (max: {SmartContractTransaction.MAX_GAS_LIMIT_CALL})",
+                gas_used=0
+            )
+        
         execution_id = hashlib.sha256(
             f"{sender}{time.time()}{transaction.contract_address}{transaction.method_name}".encode()
         ).hexdigest()[:16]
@@ -219,6 +452,8 @@ class StellarisVMManager:
             tx_hash = hashlib.sha256(transaction.hex().encode()).hexdigest()
             self.blockchain_interface.set_current_transaction_hash(tx_hash)
             
+            logger.info(f"Calling contract {transaction.contract_address} method '{transaction.method_name}' for {sender}, gas_limit: {transaction.gas_limit}")
+            
             # Execute contract method
             result = vm.call_contract(
                 transaction.contract_address,
@@ -232,6 +467,8 @@ class StellarisVMManager:
             # Update transaction with results
             transaction.gas_used = vm.execution_context.gas_used if vm.execution_context else 0
             transaction.execution_result = result
+            
+            logger.info(f"Contract call successful, result: {result}, gas used: {transaction.gas_used}")
             
             # Persist updated contract state
             if transaction.contract_address in vm.contracts:
@@ -252,7 +489,7 @@ class StellarisVMManager:
             )
             
         except Exception as e:
-            logger.error(f"Contract call failed: {e}")
+            logger.error(f"Contract call failed: {e}", exc_info=True)
             return ExecutionResult(
                 success=False,
                 error=str(e),

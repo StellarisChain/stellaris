@@ -9,7 +9,8 @@ import re
 import json
 from decimal import Decimal
 from datetime import datetime, timedelta
-import hashlib 
+import hashlib
+import logging 
 
 from asyncpg import UniqueViolationError
 from fastapi import FastAPI, Body, Query
@@ -35,15 +36,16 @@ from stellaris.manager import create_block, get_difficulty, Manager, get_transac
     split_block_content, calculate_difficulty, clear_pending_transactions, block_to_bytes
 from stellaris.node.nodes_manager import NodesManager, NodeInterface
 from stellaris.node.utils import ip_is_local
-from stellaris.transactions import Transaction, CoinbaseTransaction, SmartContractTransaction
+from stellaris.transactions import Transaction, CoinbaseTransaction, TreasuryTransaction, SmartContractTransaction
 from stellaris.database import Database
-from stellaris.constants import VERSION, ENDIAN
+from stellaris.constants import VERSION, ENDIAN, NETWORK_ID, NETWORK_MAGIC_BYTES
 from typing import List, Dict, Optional
 
 # Smart Contract imports
 try:
     from stellaris.svm.vm_manager import StellarisVMManager, ExecutionResult
-    from stellaris.svm.vm import StellarisVM
+    # Import RestrictedStellarisVM for constants
+    from stellaris.svm.restricted_vm import RestrictedStellarisVM as StellarisVM
     from stellaris.svm.exceptions import SVMError, SVMContractError
     VM_AVAILABLE = True
 except ImportError:
@@ -57,6 +59,9 @@ except ImportError:
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+
+# Setup logger
+logger = logging.getLogger(__name__)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 db: Database = None
@@ -164,6 +169,9 @@ async def startup_event():
     handshake_manager.set_http_client(http_client)
     handshake_manager.set_nodes_manager(nodes_manager)
     
+    # Start peer discovery background task for decentralized network
+    asyncio.create_task(peer_discovery_loop())
+    
     # Include API routes
     try:
         from stellaris.node.routes import api_router
@@ -180,6 +188,49 @@ app.add_middleware(
 )
 
 config = dotenv_values(".env")
+
+async def peer_discovery_loop():
+    """
+    Background task for continuous peer discovery.
+    This implements a decentralized peer discovery mechanism using:
+    1. Bootstrap nodes as initial entry points (multiple for redundancy)
+    2. Peer exchange (gossip protocol) with known peers
+    3. Periodic discovery to maintain healthy peer count
+    """
+    global nodes_manager
+    
+    # Wait for node to be fully initialized
+    await asyncio.sleep(10)
+    
+    print("Starting decentralized peer discovery loop...")
+    
+    # Run initial discovery
+    try:
+        if nodes_manager:
+            await nodes_manager.run_peer_discovery()
+    except Exception as e:
+        print(f"Initial peer discovery failed: {e}")
+    
+    # Continuous discovery loop
+    while True:
+        try:
+            await asyncio.sleep(600)  # Run every 10 minutes
+            
+            if nodes_manager:
+                # Run peer discovery
+                stats = await nodes_manager.run_peer_discovery()
+                
+                # Log if we're running low on peers
+                if stats['total_peers'] < 10:
+                    print(f"Warning: Low peer count ({stats['total_peers']}), increasing discovery frequency")
+                    # Run again sooner if we're low on peers
+                    await asyncio.sleep(60)
+                    await nodes_manager.run_peer_discovery()
+        
+        except Exception as e:
+            print(f"Peer discovery loop error: {e}")
+            # Continue running even if there's an error
+            await asyncio.sleep(300)  # Wait 5 minutes before retrying
 
 async def propagate(path: str, args: dict, ignore_url=None, nodes: list = None, 
                 max_retries: int = 3, critical: bool = False):
@@ -334,10 +385,17 @@ async def create_blocks(blocks: list):
         txs_hex = block_info['transactions']
         txs = [await Transaction.from_hex(tx) for tx in txs_hex]
         #txs = [await Transaction.from_hex(tx, set_timestamp=True) for tx in txs_hex]
+        
+        # Remove coinbase and treasury transactions - they will be recreated by create_block
+        filtered_txs = []
         for tx in txs:
             if isinstance(tx, CoinbaseTransaction):
-                txs.remove(tx)
-                break
+                continue  # Skip coinbase
+            if isinstance(tx, TreasuryTransaction):
+                continue  # Skip treasury - will be recreated if needed
+            filtered_txs.append(tx)
+        
+        txs = filtered_txs
         hex_txs = [tx.hex() for tx in txs]
         block['merkle_tree'] = get_transactions_merkle_tree(hex_txs)
         block_content = block.get('content') or block_to_bytes(last_block['hash'], block)
@@ -365,13 +423,34 @@ async def create_blocks(blocks: list):
 
 
 async def _sync_blockchain(node_url: str = None):
+    """
+    Sync blockchain from peer nodes.
+    Uses decentralized approach - tries multiple peers if one fails.
+    """
     print('sync blockchain')
+    
+    # Select sync source node with fallback strategy
     if not node_url:
-        #node_url = "https://stellaris-node.connor33341.dev/"
+        # Try to get from recent active nodes
         nodes = NodesManager.get_recent_nodes()
+        
+        # If no recent nodes, try bootstrap nodes
         if not nodes:
+            print("No recent nodes found, attempting bootstrap discovery...")
+            if nodes_manager:
+                await nodes_manager.discover_peers_from_bootstrap()
+                nodes = NodesManager.get_recent_nodes()
+        
+        if not nodes:
+            print("Warning: No peers available for sync")
             return
-        node_url = random.choice(nodes)
+        
+        # Randomly select a node to avoid centralization
+        node_url = random.choice(nodes).get('url')
+        if not node_url:
+            print("Warning: Selected peer has no URL")
+            return
+    
     node_url = node_url.strip('/')
     _, last_block = await calculate_difficulty()
     starting_from = i = await db.get_next_block_id()
@@ -461,6 +540,10 @@ async def startup():
     global config
     global self_url
     
+    # Print network identification
+    print(f"🌐 Starting Stellaris Node on network: {NETWORK_ID.upper()}")
+    print(f"   Network magic bytes: {NETWORK_MAGIC_BYTES[NETWORK_ID].hex()}")
+    
     db = await Database.create(
         user=config['STELLARIS_DATABASE_USER'] if 'STELLARIS_DATABASE_USER' in config else "stellaris" ,
         password=config['STELLARIS_DATABASE_PASSWORD'] if 'STELLARIS_DATABASE_PASSWORD' in config else 'stellaris',
@@ -508,7 +591,11 @@ async def shutdown():
 
 @app.get("/")
 async def root():
-    return {"version": VERSION, "unspent_outputs_hash": await db.get_unspent_outputs_hash()}
+    return {
+        "version": VERSION,
+        "network_id": NETWORK_ID,  # Add network ID for mainnet/testnet identification
+        "unspent_outputs_hash": await db.get_unspent_outputs_hash()
+    }
 
 
 async def propagate_old_transactions(propagate_txs):
@@ -874,10 +961,15 @@ async def deploy_contract(request: Request, data: dict = Body(...)):
             # Calculate transaction hash
             tx_hash = sc_transaction.hash()
             
+            logger.info(f"Contract deployed successfully at {result.result}, adding to pending transactions...")
+            
             # Add transaction to pending pool
             tx_added = await db.add_pending_transaction(sc_transaction)
             
+            logger.info(f"Transaction added to pending pool: {tx_added}")
+            
             if not tx_added:
+                logger.error("Failed to add transaction to pending pool")
                 return {
                     'ok': False,
                     'error': 'Failed to add transaction to pending pool - transaction verification failed',

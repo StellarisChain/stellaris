@@ -94,6 +94,12 @@ class ContractDeployer:
                 "class_name": "SRC20Token"
             },
             "3": {
+                "name": "Fixed SRC20 Token",
+                "description": "Expiramental, might work?",
+                "file": "examples/src20_enhanced_fixed.py",
+                "class_name": "SRC20Token"
+            },
+            "4": {
                 "name": "Simple Test Contract",
                 "description": "Basic test contract for VM validation",
                 "file": "examples/simple_test.py",
@@ -642,11 +648,17 @@ class ContractDeployer:
             
             # Submit transaction via deploy_contract API
             tx_hex = sc_transaction.hex()
+            
+            # Save hex to file for debugging
+            with open('/tmp/last_deploy_hex.txt', 'w') as f:
+                f.write(tx_hex)
+            
             print(f"🔍 Debug info before submission:")
             print(f"   - Transaction hex length: {len(tx_hex)}")
             print(f"   - Transaction hash: {sc_transaction.hash()}")
             print(f"   - Input signatures: {[inp.signed is not None for inp in sc_transaction.inputs]}")
             print(f"   - Hex preview: {tx_hex[:100]}...")
+            print(f"   - Hex saved to /tmp/last_deploy_hex.txt")
             
             deploy_data = {
                 "transaction_hex": tx_hex

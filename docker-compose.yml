@@ -5,10 +5,36 @@ services:
     tty: true
     restart: unless-stopped
     environment:
+      # Network Configuration
+      - STELLARIS_NETWORK_ID=mainnet  # Use 'mainnet' or 'testnet'
+      
+      # Bootstrap Nodes
+      - STELLARIS_BOOTSTRAP_NODES=https://stellaris-node.connor33341.dev
+      - MAIN_STELLARIS_NODE_URL=https://stellaris-node.connor33341.dev
+      
+      # Node Configuration
+      - STELLARIS_SELF_URL=http://stellaris-node:8000  # Update with your public URL
       - DATABASE_PATH=./data/database
       - NODE_HOST=0.0.0.0
-      - NODE_PORT=5432
-      - DEFAULT_NODES=https://stellaris-node.connor33341.dev
+      - NODE_PORT=8000
+      
+      # Treasury Configuration (optional overrides)
+      - TREASURY_WALLET=E32vDuz39DjXmDyJF1juU9cvt1yJ4W8xdGcZAj76i5uUH
+      - TREASURY_TAX_RATE=0.25
+      - TREASURY_TAX_INTERVAL=25000
+      
+      # Database Configuration
+      - STELLARIS_DATABASE_USER=stellaris
+      - STELLARIS_DATABASE_PASSWORD=stellaris
+      - STELLARIS_DATABASE_NAME=stellaris
+      - STELLARIS_DATABASE_HOST=localhost
+      
+      # Security
       - ENABLE_RATE_LIMITING=true
     ports:
-      - "5432:5432"
+      - "8000:8000"
+    volumes:
+      - stellaris-data:/app/data
+
+volumes:
+  stellaris-data:

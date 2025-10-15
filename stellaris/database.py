@@ -12,7 +12,7 @@ import pickledb
 
 from stellaris.constants import MAX_BLOCK_SIZE_HEX, SMALLEST
 from stellaris.utils.general import sha256, point_to_string, string_to_point, point_to_bytes, AddressFormat, normalize_block
-from stellaris.transactions import Transaction, CoinbaseTransaction, TransactionInput
+from stellaris.transactions import Transaction, CoinbaseTransaction, TreasuryTransaction, TransactionInput
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 OLD_BLOCKS_TRANSACTIONS_ORDER = pickledb.load(dir_path + '/old_block_transactions_order.json', True)
@@ -52,6 +52,8 @@ class Database:
         # Smart contract related storage
         self.contracts_file = None
         self.contract_storage_file = None
+        # Treasury tracking
+        self.treasury_file = None
         
         self._blocks = {}
         self._transactions = {}
@@ -62,6 +64,13 @@ class Database:
         # Smart contract storage
         self._contracts = {}
         self._contract_storage = {}
+        # Treasury data: accumulated fees and distributions
+        self._treasury_data = {
+            'accumulated_fees': '0',  # Store as string for precision
+            'total_distributed': '0',
+            'distributions': {},  # block_number -> amount
+            'last_distribution_block': 0
+        }
         
         self.is_indexed = True
         self._lock = asyncio.Lock()
@@ -80,6 +89,8 @@ class Database:
         # Smart contract files
         self.contracts_file = self.data_dir / 'contracts.json.gz'
         self.contract_storage_file = self.data_dir / 'contract_storage.json.gz'
+        # Treasury file
+        self.treasury_file = self.data_dir / 'treasury.json.gz'
         
         await self._load_data()
         Database.instance = self
@@ -306,6 +317,11 @@ class Database:
         self._contracts = await self._load_from_file(self.contracts_file)
         self._contract_storage = await self._load_from_file(self.contract_storage_file)
         
+        # Load treasury data
+        treasury_data = await self._load_from_file(self.treasury_file)
+        if treasury_data:
+            self._treasury_data.update(treasury_data)
+        
         unspent_data = await self._load_from_file(self.unspent_outputs_file)
         self._unspent_outputs = set(tuple(item) for item in unspent_data.get('outputs', []))
         
@@ -333,15 +349,22 @@ class Database:
     async def _save_pending_spent_outputs(self):
         data = {'outputs': list(self._pending_spent_outputs)}
         await self._save_to_file(self.pending_spent_outputs_file, data)
+    
+    async def _save_treasury_data(self):
+        await self._save_to_file(self.treasury_file, self._treasury_data)
 
     async def add_pending_transaction(self, transaction: Transaction, verify: bool = True):
         if isinstance(transaction, CoinbaseTransaction):
-            print(f"Debug: {transaction}")
+            print(f"Debug: Cannot add coinbase transaction to pending pool")
             return False
         tx_hex = transaction.hex()
-        if verify and not await transaction.verify_pending():
-            print(f"Debug: Verification failed {tx_hex}")
-            return False
+        if verify:
+            print(f"Debug: Verifying transaction before adding to pending pool...")
+            verification_result = await transaction.verify_pending()
+            print(f"Debug: Verification result: {verification_result}")
+            if not verification_result:
+                print(f"Debug: Verification failed for tx {tx_hex[:100]}...")
+                return False
         
         tx_hash = sha256(tx_hex)
         utc_datetime = datetime.now(timezone.utc)
@@ -550,10 +573,10 @@ class Database:
         if to_remove:
             await self._save_pending_transactions()
 
-    async def add_transaction(self, transaction: Union[Transaction, CoinbaseTransaction], block_hash: str):
+    async def add_transaction(self, transaction: Union[Transaction, CoinbaseTransaction, TreasuryTransaction], block_hash: str):
         await self.add_transactions([transaction], block_hash)
 
-    async def add_transactions(self, transactions: List[Union[Transaction, CoinbaseTransaction]], block_hash: str):
+    async def add_transactions(self, transactions: List[Union[Transaction, CoinbaseTransaction, TreasuryTransaction]], block_hash: str):
         block_timestamp = None
         if block_hash in self._blocks:
             block_timestamp = self._blocks[block_hash].get('timestamp')
@@ -565,6 +588,8 @@ class Database:
             time_received = None
             if isinstance(transaction, Transaction) and tx_hash in self._pending_transactions:
                 time_received = self._pending_transactions[tx_hash].get('time_received')
+            elif hasattr(transaction, 'treasury_address') and block_timestamp:  # TreasuryTransaction
+                time_received = block_timestamp
             elif isinstance(transaction, CoinbaseTransaction) and block_timestamp:
                 time_received = block_timestamp
             
@@ -576,7 +601,8 @@ class Database:
                 'outputs_addresses': [tx_output.address for tx_output in transaction.outputs],
                 'outputs_amounts': [tx_output.amount * SMALLEST for tx_output in transaction.outputs],
                 'fees': transaction.fees if isinstance(transaction, Transaction) else 0,
-                'time_received': time_received
+                'time_received': time_received,
+                'is_treasury': hasattr(transaction, 'treasury_address')  # Mark treasury transactions
             }
             
             self._transaction_block_map[tx_hash] = block_hash
@@ -1207,3 +1233,74 @@ class Database:
             if address in inputs_addresses:
                 count += 1
         return count
+    
+    # Treasury management methods
+    async def accumulate_treasury_fees(self, amount: Decimal):
+        """Add fees to the treasury accumulation with proper precision handling"""
+        if amount < 0:
+            raise ValueError("Cannot accumulate negative treasury fees")
+        
+        # Ensure proper Decimal precision throughout
+        current_fees = Decimal(str(self._treasury_data.get('accumulated_fees', 0)))
+        self._treasury_data['accumulated_fees'] = str(current_fees + amount)
+        await self._save_treasury_data()
+    
+    async def get_accumulated_treasury_fees(self) -> Decimal:
+        """Get current accumulated treasury fees"""
+        return Decimal(str(self._treasury_data.get('accumulated_fees', 0)))
+    
+    async def distribute_treasury_funds(self, block_number: int, amount: Decimal):
+        """Record a treasury distribution with validation"""
+        if amount < 0:
+            raise ValueError("Cannot distribute negative treasury amount")
+        
+        # Validate we have enough accumulated fees
+        current_fees = Decimal(str(self._treasury_data.get('accumulated_fees', 0)))
+        if amount > current_fees:
+            raise ValueError(f"Cannot distribute {amount}, only {current_fees} accumulated")
+        
+        # Record distribution
+        self._treasury_data['distributions'][str(block_number)] = str(amount)
+        
+        # Update totals
+        total_distributed = Decimal(str(self._treasury_data.get('total_distributed', 0)))
+        self._treasury_data['total_distributed'] = str(total_distributed + amount)
+        
+        # Deduct from accumulated fees
+        self._treasury_data['accumulated_fees'] = str(current_fees - amount)
+        self._treasury_data['last_distribution_block'] = block_number
+        
+        await self._save_treasury_data()
+    
+    async def get_treasury_distribution_history(self) -> dict:
+        """Get all treasury distributions"""
+        return self._treasury_data['distributions']
+    
+    async def get_last_treasury_distribution_block(self) -> int:
+        """Get the block number of the last treasury distribution"""
+        return self._treasury_data['last_distribution_block']
+    
+    async def is_treasury_distribution_block(self, block_number: int) -> bool:
+        """
+        Check if a block number should trigger a treasury distribution.
+        Treasury distributions happen at regular intervals (e.g., every 25,000 blocks).
+        
+        Args:
+            block_number: The block number to check
+            
+        Returns:
+            True if this block should have a treasury distribution
+        """
+        from stellaris.constants import BLOCK_CONFIG
+        
+        if block_number <= 0:
+            return False
+        
+        treasury_config = BLOCK_CONFIG.get('treasury', {})
+        tax_interval = treasury_config.get('tax_interval', 25000)
+        
+        # Ensure tax_interval is valid
+        if tax_interval <= 0:
+            return False
+        
+        return block_number % tax_interval == 0

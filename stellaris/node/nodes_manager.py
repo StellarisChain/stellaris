@@ -21,9 +21,21 @@ from stellaris.node.security_monitor import get_security_monitor, SecurityEventT
 ACTIVE_NODES_DELTA = 60 * 60 * 24 * 7  # 7 days
 MAX_PEERS_COUNT = 200
 
+# Decentralized bootstrap nodes list - multiple nodes for redundancy
+DEFAULT_BOOTSTRAP_NODES = [
+    'https://stellaris-node.connor33341.dev',
+    # Add more bootstrap nodes here for production
+]
+
 # Get environment variables with defaults
-MAIN_STELLARIS_NODE_URL = os.environ.get('MAIN_STELLARIS_NODE_URL', 'https://stellaris-node.connor33341.dev')
+MAIN_STELLARIS_NODE_URL = os.environ.get('MAIN_STELLARIS_NODE_URL', DEFAULT_BOOTSTRAP_NODES[0])
+BOOTSTRAP_NODES = os.environ.get('STELLARIS_BOOTSTRAP_NODES', ','.join(DEFAULT_BOOTSTRAP_NODES)).split(',')
 SELF_URL = os.environ.get('STELLARIS_SELF_URL', None)
+
+# Peer discovery settings
+PEER_EXCHANGE_INTERVAL = 60 * 10  # Exchange peers every 10 minutes
+PEER_EXCHANGE_COUNT = 20  # Number of peers to exchange per request
+MIN_PEERS_FOR_DISCOVERY = 5  # Minimum peers before triggering discovery
 
 # Path setup
 path = dirname(os.path.realpath(__file__)) + '/nodes.json'
@@ -95,18 +107,18 @@ class NodesManager:
             initialize_identity()
             instance.initialize(get_node_id())
     
-    def sync(self):
+    def _sync_to_disk(self):
         """
-        Persist the peer registry to disk
+        Internal method to persist the peer registry to disk
         """
         with open(path, 'wt') as f:
             json.dump({"peers": self.peers}, f)
             
     @classmethod
     def sync(cls):
-        """Static compatibility method"""
+        """Persist peer registry to disk (static compatibility method)"""
         instance = cls.get_instance()
-        instance.sync()
+        instance._sync_to_disk()
     
     def purge_peers(self):
         """
@@ -332,6 +344,139 @@ class NodesManager:
             # Sort by last_seen (descending) and take up to limit
             propagate_peers.sort(key=lambda p: p.get("last_seen", 0), reverse=True)
             return [peer["url"] for peer in propagate_peers[:limit] if peer.get("url")]
+    
+    async def discover_peers_from_bootstrap(self) -> int:
+        """
+        Discover peers from bootstrap nodes.
+        Returns the number of new peers discovered.
+        
+        This method provides decentralized peer discovery by:
+        1. Connecting to multiple bootstrap nodes (not just one)
+        2. Requesting their peer lists
+        3. Adding new peers to our registry
+        """
+        new_peers_count = 0
+        
+        for bootstrap_url in BOOTSTRAP_NODES:
+            try:
+                # Skip if this is our own URL
+                if bootstrap_url == SELF_URL:
+                    continue
+                
+                # Request peers from bootstrap node
+                response = await self.client.get(
+                    f"{bootstrap_url.rstrip('/')}/get_nodes",
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('ok') and 'result' in data:
+                        peers_list = data['result']
+                        
+                        # Add each peer to our registry
+                        for peer_data in peers_list:
+                            node_id = peer_data.get('node_id')
+                            url = peer_data.get('url')
+                            pubkey = peer_data.get('pubkey', '')
+                            
+                            if node_id and url and node_id != self.node_id:
+                                # Add or update peer
+                                is_new = self.add_or_update_peer(
+                                    node_id, pubkey, url, is_public=True
+                                )
+                                if is_new:
+                                    new_peers_count += 1
+                        
+                        print(f"Discovered {len(peers_list)} peers from {bootstrap_url}")
+            
+            except Exception as e:
+                print(f"Failed to discover peers from {bootstrap_url}: {e}")
+                continue
+        
+        return new_peers_count
+    
+    async def exchange_peers_with_peer(self, peer_url: str) -> int:
+        """
+        Exchange peer lists with a specific peer (gossip protocol).
+        Returns the number of new peers discovered.
+        
+        This implements a gossip-based peer discovery where nodes share
+        their peer lists with each other, creating a decentralized network.
+        """
+        new_peers_count = 0
+        
+        try:
+            # Request peers from the peer
+            response = await self.client.get(
+                f"{peer_url.rstrip('/')}/get_nodes",
+                timeout=10.0
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('ok') and 'result' in data:
+                    peers_list = data['result'][:PEER_EXCHANGE_COUNT]
+                    
+                    # Add each peer to our registry
+                    for peer_data in peers_list:
+                        node_id = peer_data.get('node_id')
+                        url = peer_data.get('url')
+                        pubkey = peer_data.get('pubkey', '')
+                        
+                        if node_id and url and node_id != self.node_id:
+                            is_new = self.add_or_update_peer(
+                                node_id, pubkey, url, is_public=True
+                            )
+                            if is_new:
+                                new_peers_count += 1
+        
+        except Exception as e:
+            print(f"Failed to exchange peers with {peer_url}: {e}")
+        
+        return new_peers_count
+    
+    async def run_peer_discovery(self) -> Dict[str, int]:
+        """
+        Run comprehensive peer discovery process.
+        Returns statistics about the discovery process.
+        
+        This method implements a multi-strategy peer discovery:
+        1. If we have few peers, connect to bootstrap nodes
+        2. Exchange peers with existing active peers (gossip)
+        3. Maintain a healthy peer count
+        """
+        stats = {
+            'bootstrap_peers': 0,
+            'exchanged_peers': 0,
+            'total_peers': len(self.peers)
+        }
+        
+        # Strategy 1: If we have few peers, use bootstrap nodes
+        if len(self.peers) < MIN_PEERS_FOR_DISCOVERY:
+            print(f"Low peer count ({len(self.peers)}), discovering from bootstrap nodes...")
+            stats['bootstrap_peers'] = await self.discover_peers_from_bootstrap()
+        
+        # Strategy 2: Exchange peers with active peers (gossip protocol)
+        recent_peers = self._get_recent_nodes_impl()
+        
+        # Select a random subset of peers to exchange with
+        exchange_count = min(5, len(recent_peers))
+        if exchange_count > 0:
+            peers_to_exchange = random.sample(recent_peers, exchange_count)
+            
+            for peer in peers_to_exchange:
+                peer_url = peer.get('url')
+                if peer_url:
+                    discovered = await self.exchange_peers_with_peer(peer_url)
+                    stats['exchanged_peers'] += discovered
+        
+        stats['total_peers'] = len(self.peers)
+        
+        print(f"Peer discovery complete: {stats['bootstrap_peers']} from bootstrap, "
+              f"{stats['exchanged_peers']} from exchange, {stats['total_peers']} total")
+        
+        return stats
     
     def set_public_status(self, is_public: bool):
         """

@@ -7,7 +7,7 @@ from typing import Tuple, List, Union
 from stellaris.database import Database, OLD_BLOCKS_TRANSACTIONS_ORDER
 from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX, BLOCK_CONFIG
 from stellaris.utils.general import sha256, timestamp, bytes_to_string, string_to_bytes
-from stellaris.transactions import CoinbaseTransaction, Transaction, SmartContractTransaction
+from stellaris.transactions import CoinbaseTransaction, TreasuryTransaction, Transaction, SmartContractTransaction
 from stellaris.utils.block_utils import calculate_difficulty, difficulty_to_hashrate, BLOCK_TIME, BLOCKS_COUNT, START_DIFFICULTY
 
 async def get_difficulty() -> Tuple[Decimal, dict]:
@@ -402,20 +402,76 @@ async def create_block(block_content: str, transactions: List[Transaction], last
     # Compute block reward based on updated schedule
     block_reward = get_block_reward(block_no)
     
-    # Create coinbase transaction
-    coinbase_transaction = CoinbaseTransaction(block_hash, address, block_reward + fees)
+    # Treasury tax handling with improved precision and validation
+    treasury_config = BLOCK_CONFIG.get('treasury', {})
+    tax_rate = Decimal(str(treasury_config.get('tax_rate', 0.25)))
+    treasury_address = treasury_config.get('wallet_address')
+    
+    # Validate tax rate is within bounds
+    if tax_rate < 0 or tax_rate > Decimal('1.0'):
+        print(f"Warning: Invalid tax rate {tax_rate}, using default 0.25")
+        tax_rate = Decimal('0.25')
+    
+    # Check if this is a treasury distribution block
+    treasury_transaction = None
+    if await database.is_treasury_distribution_block(block_no):
+        # Calculate treasury distribution amount
+        accumulated_fees = await database.get_accumulated_treasury_fees()
+        treasury_amount = accumulated_fees
+        
+        if treasury_amount > 0 and treasury_address:
+            # Calculate the period for this distribution
+            tax_interval = treasury_config.get('tax_interval', 25000)
+            start_block = max(1, block_no - tax_interval + 1)  # Ensure start_block >= 1
+            end_block = block_no
+            
+            # Create treasury transaction
+            treasury_transaction = TreasuryTransaction(
+                block_hash, treasury_address, treasury_amount, start_block, end_block
+            )
+            
+            # Record the distribution
+            try:
+                await database.distribute_treasury_funds(block_no, treasury_amount)
+                print(f"Treasury distribution: {treasury_amount} to {treasury_address} for blocks {start_block}-{end_block}")
+            except ValueError as e:
+                print(f"Treasury distribution failed: {e}")
+                treasury_transaction = None
+    
+    # Calculate tax portion of current fees for accumulation
+    if fees > 0:
+        # Use proper Decimal arithmetic to maintain precision
+        treasury_tax = (fees * tax_rate).quantize(Decimal('0.000001'))
+        miner_fees = fees - treasury_tax
+        
+        # Accumulate treasury portion (with validation in database method)
+        try:
+            await database.accumulate_treasury_fees(treasury_tax)
+        except ValueError as e:
+            print(f"Treasury accumulation failed: {e}")
+            # If accumulation fails, give all fees to miner
+            miner_fees = fees
+    else:
+        miner_fees = fees
+    
+    # Create coinbase transaction (miner gets reward + reduced fees)
+    coinbase_transaction = CoinbaseTransaction(block_hash, address, block_reward + miner_fees)
     if not coinbase_transaction.outputs[0].verify():
         print("Coinbase output verification failed")
         return False
 
     # Perform a grouped commit for the entire block with a single try/except
     try:
-        # Add block
+        # Add block (use total fees for block record)
         await database.add_block(block_no, block_hash, block_content, address, random, 
                                 content_difficulty, block_reward + fees, content_time)
         
         # Add coinbase transaction
         await database.add_transaction(coinbase_transaction, block_hash)
+        
+        # Add treasury transaction if this is a distribution block
+        if treasury_transaction:
+            await database.add_transaction(treasury_transaction, block_hash)
         
         # Add regular transactions
         await database.add_transactions(transactions, block_hash)
@@ -427,13 +483,21 @@ async def create_block(block_content: str, transactions: List[Transaction], last
         print(f'a transaction has not been added in block', e)
         await database.delete_block(block_no)
         return False
-    await database.add_unspent_transactions_outputs(transactions + [coinbase_transaction])
+    
+    # Prepare transactions for unspent outputs
+    all_special_transactions = [coinbase_transaction]
+    if treasury_transaction:
+        all_special_transactions.append(treasury_transaction)
+    
+    await database.add_unspent_transactions_outputs(transactions + all_special_transactions)
     if transactions:
         await database.remove_pending_transactions_by_hash([transaction.hash() for transaction in transactions])
         await database.remove_unspent_outputs(transactions)
         await database.remove_pending_spent_outputs(transactions)
 
-        print(f'Added {len(transactions)} transactions in block {block_no}. Reward: {block_reward}, Fees: {fees}')
+        treasury_info = f", Treasury: {treasury_tax if fees > 0 else 0}" if fees > 0 else ""
+        treasury_dist_info = f", Treasury Distribution: {treasury_transaction.amount}" if treasury_transaction else ""
+        print(f'Added {len(transactions)} transactions in block {block_no}. Reward: {block_reward}, Miner Fees: {miner_fees}{treasury_info}{treasury_dist_info}')
     Manager.difficulty = None
     return True
 

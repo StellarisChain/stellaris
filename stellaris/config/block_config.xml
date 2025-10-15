@@ -2,12 +2,19 @@
     <!-- activationBlock: Block number from which this configuration becomes active -->
     <!-- Blocks before this number will use the legacy reward system -->
     <ActivationBlock>1</ActivationBlock>
+    
+    <!-- Treasury Configuration -->
+    <Treasury>
+        <WalletAddress>E32vDuz39DjXmDyJF1juU9cvt1yJ4W8xdGcZAj76i5uUH</WalletAddress>
+        <TaxRate>0.25</TaxRate>
+        <TaxInterval>2500</TaxInterval>
+    </Treasury>
 
-    <Range minIndex="1" maxIndex="100000">
+    <Range minIndex="1" maxIndex="75000">
         <Reward>1000</Reward>
         <MaxDifficulty>2.6</MaxDifficulty>
     </Range>
-    <Range minIndex="previous" maxIndex="200000">
+    <!--<Range minIndex="previous" maxIndex="200000">
         <Reward>10</Reward>
         <MaxDifficulty>7.1</MaxDifficulty>
     </Range>
@@ -18,5 +25,5 @@
     <Range minIndex="previous" maxIndex="50000000">
         <Reward>0.001</Reward>
         <MaxDifficulty>18</MaxDifficulty>
-    </Range>
+    </Range>-->
 </BlockConfig>

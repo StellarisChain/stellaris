@@ -11,7 +11,8 @@ import time
 from stellaris.database import Database
 from stellaris.manager import Manager
 from stellaris.utils.general import sha256
-from stellaris.svm.vm import StellarisVM
+# Import RestrictedStellarisVM for type hints only
+from stellaris.svm.restricted_vm import RestrictedStellarisVM
 
 if TYPE_CHECKING:
     from stellaris.transactions.smart_contract_transaction import SmartContractTransaction
@@ -139,18 +140,20 @@ class StellarisBlockchainInterface:
     async def estimate_gas(self, transaction_data: Dict[str, Any]) -> int:
         """Estimate gas needed for a transaction"""
         # Basic gas estimation - can be made more sophisticated
-        base_gas = StellarisVM.BASE_GAS
+        # Use constants directly to avoid circular dependencies
+        BASE_GAS = 1
+        GAS_COST_BASE_CALL = 0.0001
         
         if transaction_data.get('operation_type') == 1:  # Deploy
             code_length = len(transaction_data.get('contract_code', ''))
-            return base_gas + (code_length * StellarisVM.GAS_COSTS['base_call'])
+            return BASE_GAS + int(code_length * GAS_COST_BASE_CALL)
         else:  # Call
-            return base_gas + StellarisVM.GAS_COSTS['base_call']
+            return BASE_GAS + int(10000 * GAS_COST_BASE_CALL)  # Estimate 10k base for calls
     
     async def get_gas_price(self) -> Decimal:
         """Get current gas price"""
         # Could be dynamic based on network congestion
-        return StellarisVM.GAS_PRICE  # 1 microtoken per gas unit
+        return Decimal('0.000001')  # 1 microtoken per gas unit
     
     async def validate_transaction(self, tx_data: Dict[str, Any]) -> bool:
         """Validate transaction against blockchain state"""

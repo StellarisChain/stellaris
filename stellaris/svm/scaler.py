@@ -1,6 +1,7 @@
 """
 Stellaris VM Scaling System
 Provides parallel execution, load balancing, and performance optimization
+Uses RestrictedPython-based VM for security
 """
 
 import asyncio
@@ -17,7 +18,8 @@ import pickle
 import hashlib
 
 from stellaris.svm.vm_manager import StellarisVMManager, ExecutionResult, VMPoolStats
-from stellaris.svm.vm import StellarisVM
+# Use RestrictedPython VM for security
+from stellaris.svm.restricted_vm import RestrictedStellarisVM as StellarisVM
 from stellaris.svm.blockchain_interface import StellarisBlockchainInterface
 from stellaris.transactions.smart_contract_transaction import SmartContractTransaction
 from stellaris.database import Database

@@ -10,6 +10,7 @@ secret.txt
 /data
 build
 dist
+/temp
 todo.txt
 testoutput
 *.out
@@ -26,6 +27,7 @@ node_modules
 .pypirc
 *.cache.txt
 test_*
+debug_*
 stellaris_wallet
 deploy_smart_contracts.py
 SMART_CONTRACTS.md
