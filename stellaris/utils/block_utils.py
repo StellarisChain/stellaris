@@ -6,7 +6,7 @@ from typing import Tuple, List, Union
 from stellaris.constants import MAX_SUPPLY, ENDIAN, MAX_BLOCK_SIZE_HEX, BLOCK_CONFIG
 from stellaris.database import Database
 
-BLOCK_TIME = 15  # Target time per block in seconds
+BLOCK_TIME = 60  # Target time per block in seconds
 BLOCKS_COUNT = 512  # Number of blocks to consider for difficulty adjustment
 START_DIFFICULTY = Decimal('6.0')
 
